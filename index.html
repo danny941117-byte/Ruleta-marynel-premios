@@ -405,7 +405,7 @@ button:disabled{
 .admin-spins{margin-top:16px;padding:12px;border:1px solid rgba(255,212,0,.35);border-radius:12px;background:rgba(255,212,0,.05);}
 .admin-spins label{display:block;color:#ffd400;font-size:.8rem;font-weight:800;margin-bottom:7px;}
 .admin-spins input{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,212,0,.4);background:#020914;color:#fff;}
-@media(max-width:480px){.admin-row{grid-template-columns:1fr 68px 38px}.admin-panel{padding:16px}.admin-toggle{top:10px;right:10px}}
+@media(max-width:480px){.admin-row{grid-template-columns:1fr 68px 38px}.admin-panel{padding:16px}.admin-toggle{top:78px;right:10px;z-index:20}.ruleta-contenedor{width:min(60vw,250px);min-width:190px}}
 
 @media(max-width:850px){
    .experiencia{
@@ -684,14 +684,21 @@ adminClose.addEventListener("click",()=>{adminOverlay.classList.remove("open");a
 adminOverlay.addEventListener("click",e=>{if(e.target===adminOverlay) adminClose.click();});
 addPrize.addEventListener("click",()=>{leerFormulario();config.premios.push({nombre:"Nuevo premio",peso:1});renderAdmin();});
 adminList.addEventListener("click",e=>{const b=e.target.closest("[data-remove]");if(!b)return;leerFormulario();config.premios.splice(Number(b.dataset.remove),1);if(!config.premios.length)config.premios.push({nombre:"Gracias por participar",peso:1});renderAdmin();});
-saveConfig.addEventListener("click",()=>{leerFormulario();guardarLocal();yaGiro=false;girando=false;boton.disabled=false;boton.textContent="🎡 GIRAR";resultado.textContent="";rotacion=0;ajustarCanvasDensidad();adminStatus.textContent="✓ Configuración guardada en este dispositivo.";});
-resetConfig.addEventListener("click",()=>{config={premios:DEFAULT_PREMIOS.map(([nombre,peso])=>({nombre,peso})),giros:1};spinLimit.value=1;guardarLocal();reconstruirDatos();renderAdmin();yaGiro=false;girando=false;boton.disabled=false;boton.textContent="🎡 GIRAR";resultado.textContent="";rotacion=0;ajustarCanvasDensidad();adminStatus.textContent="✓ Configuración restablecida.";});
+saveConfig.addEventListener("click",()=>{leerFormulario();guardarLocal();yaGiro=false;girando=false;boton.disabled=false;boton.textContent="🎡 GIRAR";resultado.textContent="";rotacion=0;ajustarCanvasDensidad();girosDisponibles=config.giros; adminStatus.textContent="✓ Configuración guardada en este dispositivo.";});
+resetConfig.addEventListener("click",()=>{config={premios:DEFAULT_PREMIOS.map(([nombre,peso])=>({nombre,peso})),giros:1};spinLimit.value=1;guardarLocal();reconstruirDatos();renderAdmin();yaGiro=false;girando=false;boton.disabled=false;boton.textContent="🎡 GIRAR";resultado.textContent="";rotacion=0;ajustarCanvasDensidad();girosDisponibles=1; adminStatus.textContent="✓ Configuración restablecida.";});
 
 function obtenerAngulos(){
     const total=pesos.reduce((a,b)=>a+b,0);
     let acumulado=0;
     return pesos.map(p=>{const inicio=acumulado/total*Math.PI*2; acumulado+=p; const fin=acumulado/total*Math.PI*2; return {inicio,fin,medio:(inicio+fin)/2};});
 }
+
+const colores = [
+    "#00eaff", "#ff168f", "#20f08a", "#a855f7", "#ff7a00",
+    "#ffe600", "#168cff", "#00d9a6", "#ff315b", "#7b61ff",
+    "#00b7ff", "#ff3d81", "#7cff00", "#ff9f00", "#d946ef",
+    "#00e5ff", "#ffcc00"
+];
 
 function ajustarCanvasDensidad() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
