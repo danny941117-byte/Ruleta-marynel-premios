@@ -953,6 +953,12 @@ function mostrarPremio(premio) {
     } else {
         resultado.innerHTML = "🏆 ¡GANASTE!<br><strong>" + escapar(premio) + "</strong>";
     }
+
+    // Las métricas se actualizan únicamente cuando el giro terminó
+    // y ya existe un premio real.
+    window.dispatchEvent(new CustomEvent("marynel:resultado", {
+        detail: { premio: String(premio) }
+    }));
 }
 
 function girarRuleta() {
@@ -1121,35 +1127,70 @@ window.addEventListener("resize", ajustarCanvas);
 <script>
 (function(){
   const KEY="marynel_ruleta_historial_v1";
-  function read(){try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){return[]}}
-  function esc(s){return String(s).replace(/[&<>"']/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]})}
-  function render(){
-    const h=read(), c={}; h.forEach(x=>c[x.premio]=(c[x.premio]||0)+1);
-    const top=Object.entries(c).sort((a,b)=>b[1]-a[1]);
-    document.getElementById("mTotal").textContent=h.length;
-    document.getElementById("mLast").textContent=h[0]?h[0].premio:"—";
-    document.getElementById("mTop").textContent=top[0]?top[0][0]:"—";
-    document.getElementById("mUnique").textContent=Object.keys(c).length;
-    document.getElementById("historyList").innerHTML=h.length?h.map(x=>'<div class="history-item"><span>🏆 '+esc(x.premio)+'</span><small>'+esc(x.fecha)+'</small></div>').join(""):'<div class="history-item"><span>Aún no hay giros registrados.</span></div>';
+  const BAD=/^(?:✨\s*)?La ruleta está girando\.{0,3}$/i;
+
+  function read(){
+    try{
+      const h=JSON.parse(localStorage.getItem(KEY)||"[]");
+      return Array.isArray(h)?h:[];
+    }catch(e){return [];}
   }
-  document.querySelectorAll("button").forEach(function(btn){
-    if(/girar|spin/i.test(btn.textContent||"")){
-      btn.addEventListener("click",function(){
-        setTimeout(function(){
-          const r=document.getElementById("resultado")||document.querySelector(".resultado,.premio-resultado,[id*='resultado'],[id*='premio']");
-          const prize=(r&&r.textContent||"").trim();
-          if(!prize)return;
-          const h=read(), clean=prize.replace(/^.*?:\s*/,"");
-          if(h[0]&&h[0].premio===clean&&Date.now()-h[0].ts<7000)return;
-          h.unshift({premio:clean,fecha:new Date().toLocaleString("es-GT"),ts:Date.now()});
-          localStorage.setItem(KEY,JSON.stringify(h.slice(0,50))); render();
-          document.getElementById("winPrize").textContent=clean;
-          document.getElementById("winCelebration").classList.add("show");
-        },4500);
-      });
+
+  function cleanHistory(){
+    const valid=read().filter(x=>x && x.premio && !BAD.test(String(x.premio).trim()));
+    localStorage.setItem(KEY,JSON.stringify(valid.slice(0,50)));
+    return valid;
+  }
+
+  function esc(s){
+    return String(s).replace(/[&<>"']/g,function(m){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m];
+    });
+  }
+
+  function render(){
+    const h=cleanHistory(), counts={};
+    h.forEach(x=>counts[x.premio]=(counts[x.premio]||0)+1);
+    const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+
+    document.getElementById("mTotal").textContent=h.length;
+    document.getElementById("mLast").textContent=h[0]?.premio||"—";
+    document.getElementById("mTop").textContent=top[0]?.[0]||"—";
+    document.getElementById("mUnique").textContent=Object.keys(counts).length;
+
+    const list=document.getElementById("historyList");
+    list.innerHTML=h.length
+      ? h.map(x=>'<div class="history-item"><span>🏆 '+esc(x.premio)+'</span><small>'+esc(x.fecha)+'</small></div>').join("")
+      : '<div class="history-item"><span>Aún no hay giros registrados.</span></div>';
+  }
+
+  // IMPORTANTE: ya no intenta leer #resultado a los 4.5 segundos.
+  // Espera el evento que la ruleta emite cuando terminó realmente.
+  window.addEventListener("marynel:resultado",function(e){
+    const premio=String(e.detail?.premio||"").trim();
+    if(!premio || BAD.test(premio)) return;
+
+    const h=cleanHistory();
+    const entry={premio,fecha:new Date().toLocaleString("es-GT"),ts:Date.now()};
+    h.unshift(entry);
+    localStorage.setItem(KEY,JSON.stringify(h.slice(0,50)));
+    render();
+
+    const win=document.getElementById("winCelebration");
+    const winPrize=document.getElementById("winPrize");
+    if(win && winPrize){
+      winPrize.textContent=premio;
+      win.classList.add("show");
+      win.setAttribute("aria-hidden","false");
     }
   });
-  document.getElementById("closeWin").addEventListener("click",function(){document.getElementById("winCelebration").classList.remove("show")});
+
+  document.getElementById("closeWin")?.addEventListener("click",function(){
+    const win=document.getElementById("winCelebration");
+    win?.classList.remove("show");
+    win?.setAttribute("aria-hidden","true");
+  });
+
   render();
 })();
 </script>
