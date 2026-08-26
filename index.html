@@ -521,7 +521,7 @@ button:disabled{
       <h2 id="adminTitle">⚙️ Panel de administración</h2>
       <button class="admin-close" id="adminClose" type="button">✕</button>
     </div>
-    <p class="admin-help">Cambia los premios y su peso de probabilidad. Todo se guarda en este navegador.</p>
+    <p class="admin-help">Cambia los premios y su peso de probabilidad. La rueda mantiene segmentos visualmente iguales; el peso se usa para seleccionar el resultado. Todo se guarda en este navegador.</p>
     <div class="admin-list" id="adminList"></div>
     <div class="admin-actions">
       <button class="admin-secondary" id="addPrize" type="button">＋ Agregar premio</button>
@@ -687,10 +687,26 @@ adminList.addEventListener("click",e=>{const b=e.target.closest("[data-remove]")
 saveConfig.addEventListener("click",()=>{leerFormulario();guardarLocal();yaGiro=false;girando=false;boton.disabled=false;boton.textContent="🎡 GIRAR";resultado.textContent="";rotacion=0;ajustarCanvasDensidad();girosDisponibles=config.giros; adminStatus.textContent="✓ Configuración guardada en este dispositivo.";});
 resetConfig.addEventListener("click",()=>{config={premios:DEFAULT_PREMIOS.map(([nombre,peso])=>({nombre,peso})),giros:1};spinLimit.value=1;guardarLocal();reconstruirDatos();renderAdmin();yaGiro=false;girando=false;boton.disabled=false;boton.textContent="🎡 GIRAR";resultado.textContent="";rotacion=0;ajustarCanvasDensidad();girosDisponibles=1; adminStatus.textContent="✓ Configuración restablecida.";});
 
+// La rueda se dibuja con segmentos visualmente iguales.
+// Las probabilidades se aplican por separado al seleccionar el resultado.
 function obtenerAngulos(){
-    const total=pesos.reduce((a,b)=>a+b,0);
-    let acumulado=0;
-    return pesos.map(p=>{const inicio=acumulado/total*Math.PI*2; acumulado+=p; const fin=acumulado/total*Math.PI*2; return {inicio,fin,medio:(inicio+fin)/2};});
+    const angulo = (Math.PI * 2) / Math.max(1, cantidad);
+    return Array.from({length:cantidad}, (_,i)=>{
+        const inicio = i * angulo;
+        const fin = inicio + angulo;
+        return {inicio, fin, medio:(inicio + fin) / 2};
+    });
+}
+
+function seleccionarPremioPonderado(){
+    const total = pesos.reduce((a,b)=>a+b,0);
+    if(total <= 0) return Math.floor(Math.random() * cantidad);
+    let objetivo = Math.random() * total;
+    for(let i=0;i<pesos.length;i++){
+        objetivo -= pesos[i];
+        if(objetivo <= 0) return i;
+    }
+    return cantidad - 1;
 }
 
 const colores = [
@@ -784,10 +800,20 @@ function girarRuleta() {
     boton.textContent = "🎡 GIRANDO...";
     resultado.textContent = "✨ La ruleta está girando...";
 
-    const vueltas = 8 + Math.random() * 5;
-    const duracion = 5200;
+    // El resultado se decide por los pesos configurados, pero la rueda
+    // conserva segmentos de igual tamaño para mantener una apariencia uniforme.
+    const indiceGanador = seleccionarPremioPonderado();
+    const segmentos = obtenerAngulos();
+    const anguloPuntero = -Math.PI / 2;
+    const medioGanador = segmentos[indiceGanador].medio;
+    const minVueltas = 8 + Math.random() * 5;
     const inicioRotacion = rotacion;
-    const destino = rotacion + vueltas * Math.PI * 2;
+    const objetivoBase = anguloPuntero - medioGanador;
+    const vueltasNecesarias = Math.ceil(
+        (inicioRotacion + minVueltas * Math.PI * 2 - objetivoBase) / (Math.PI * 2)
+    );
+    const destino = objetivoBase + vueltasNecesarias * Math.PI * 2;
+    const duracion = 5200;
     const tiempoInicial = performance.now();
 
     function animar(tiempoActual) {
