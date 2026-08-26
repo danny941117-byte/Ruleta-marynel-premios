@@ -695,15 +695,15 @@ let musicOn = true;
 let musicStep = 0;
 const synthNotes = [220, 277.18, 329.63, 440, 329.63, 277.18, 246.94, 369.99];
 
-function iniciarAudio(){
+async function iniciarAudio(){
     if(!musicOn) return;
     if(!audioCtx){
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         masterGain = audioCtx.createGain();
-        masterGain.gain.value = 0.045;
+        masterGain.gain.value = 0.16;
         masterGain.connect(audioCtx.destination);
     }
-    if(audioCtx.state === "suspended") audioCtx.resume();
+    if(audioCtx.state === "suspended") await audioCtx.resume();
     if(!musicTimer) reproducirPulso();
 }
 
@@ -715,7 +715,7 @@ function reproducirPulso(){
     osc.type = "sine";
     osc.frequency.setValueAtTime(synthNotes[musicStep % synthNotes.length], now);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.12, now + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.18, now + 0.025);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
     osc.connect(gain).connect(masterGain);
     osc.start(now);
@@ -741,7 +741,7 @@ function sonidoGiro(){
     osc.frequency.setValueAtTime(180,now);
     osc.frequency.exponentialRampToValueAtTime(720,now+0.22);
     gain.gain.setValueAtTime(0.0001,now);
-    gain.gain.exponentialRampToValueAtTime(0.22,now+0.025);
+    gain.gain.exponentialRampToValueAtTime(0.34,now+0.025);
     gain.gain.exponentialRampToValueAtTime(0.0001,now+0.55);
     osc.connect(gain).connect(masterGain); osc.start(now); osc.stop(now+0.6);
 }
@@ -753,7 +753,7 @@ function sonidoPremio(){
         const osc=audioCtx.createOscillator(); const gain=audioCtx.createGain();
         osc.type="sine"; osc.frequency.value=f;
         gain.gain.setValueAtTime(0.0001,now);
-        gain.gain.exponentialRampToValueAtTime(0.22,now+0.025);
+        gain.gain.exponentialRampToValueAtTime(0.34,now+0.025);
         gain.gain.exponentialRampToValueAtTime(0.0001,now+0.35);
         osc.connect(gain).connect(masterGain); osc.start(now); osc.stop(now+0.38);
     });
@@ -1013,10 +1013,10 @@ function dibujarRuleta() {
     ctx.fillText("GIRA", centro, centro);
 }
 
-function girarRuleta() {
+async function girarRuleta() {
     if (girando || yaGiro || girosDisponibles <= 0) return;
 
-    iniciarAudio();
+    await iniciarAudio();
     sonidoGiro();
 
     // Se marca antes de iniciar la animación para que una actualización
