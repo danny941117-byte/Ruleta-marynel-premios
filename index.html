@@ -762,6 +762,45 @@ button:disabled{
 }
 </style>
 
+
+<style id="whatsapp-claim-style">
+.whatsapp-claim{
+  display:none;
+  width:min(560px,92%);
+  margin:12px auto 14px;
+  padding:12px 16px;
+  box-sizing:border-box;
+  border:1px solid rgba(37,211,102,.75);
+  border-radius:14px;
+  background:linear-gradient(135deg,rgba(10,55,45,.9),rgba(3,20,28,.92));
+  box-shadow:0 0 18px rgba(37,211,102,.16);
+  text-align:center;
+}
+.whatsapp-claim.show{display:block}
+.whatsapp-claim-text{
+  margin:0 0 9px;
+  color:#fff;
+  font-size:clamp(.9rem,2.7vw,1.05rem);
+  font-weight:800;
+}
+.whatsapp-claim-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  min-height:40px;
+  padding:9px 16px;
+  border-radius:999px;
+  background:#25D366;
+  color:#06140c;
+  text-decoration:none;
+  font-weight:900;
+  font-size:.9rem;
+  box-shadow:0 0 14px rgba(37,211,102,.28);
+}
+.whatsapp-claim-link:hover{filter:brightness(1.08);transform:translateY(-1px)}
+</style>
+
 </head>
 
 <body>
@@ -885,7 +924,18 @@ button:disabled{
                 <div class="qr-label">Facebook MARYNEL • Toca para abrir</div>
             </a>
 
-            <div class="neon-line"></div>
+            
+<div class="whatsapp-claim" id="whatsappClaim" aria-hidden="true">
+  <p class="whatsapp-claim-text">🎉 Felicidades, reclama tu premio al WhatsApp</p>
+  <a class="whatsapp-claim-link"
+     id="whatsappClaimLink"
+     href="#"
+     target="_blank"
+     rel="noopener noreferrer">
+    💬 Reclamar mi premio por WhatsApp
+  </a>
+</div>
+<div class="neon-line"></div>
         </aside>
 
     </main>
@@ -1247,6 +1297,11 @@ function dibujarRuleta() {
 
 function mostrarPremio(premio) {
     if (premio === "Gracias por participar") {
+        const claim = document.getElementById("whatsappClaim");
+        if (claim) {
+            claim.classList.remove("show");
+            claim.setAttribute("aria-hidden","true");
+        }
         resultado.innerHTML = "💙 <strong>¡Gracias por participar!</strong>";
     } else {
         resultado.innerHTML = "🏆 ¡GANASTE!<br><strong>" + escapar(premio) + "</strong>";
@@ -1305,6 +1360,11 @@ function girarRuleta() {
             const winPrize = document.getElementById("winPrize");
             if (win && winPrize) {
                 winPrize.textContent = premios[indiceGanador];
+                if (premios[indiceGanador] !== "Gracias por participar" &&
+                    typeof window.marynelPrepareWhatsAppClaim === "function") {
+                    window.marynelPrepareWhatsAppClaim(premios[indiceGanador]);
+                }
+
                 if(winParticipant) winParticipant.textContent = "Ganador: " + nombreCompleto();
                 win.classList.add("show");
                 win.setAttribute("aria-hidden", "false");
@@ -1549,6 +1609,23 @@ window.addEventListener("resize", ajustarCanvas);
 
     if (status) status.textContent = "✓ Contadores reiniciados a 0.";
     setTimeout(() => location.reload(), 700);
+  });
+})();
+</script>
+
+
+<script id="whatsapp-claim-script">
+(() => {
+  const claim = document.getElementById("whatsappClaim");
+  const link = document.getElementById("whatsappClaimLink");
+  if (!claim || !link) return;
+
+  const whatsappNumber = "50248681178";
+  const winningPrize = (window.marynelPrepareWhatsAppClaim = function(prize) {
+    const text = `Felicidades, reclama tu premio al WhatsApp. Premio: ${prize}`;
+    link.href = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`;
+    claim.classList.add("show");
+    claim.setAttribute("aria-hidden","false");
   });
 })();
 </script>
