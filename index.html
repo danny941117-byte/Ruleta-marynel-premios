@@ -656,9 +656,54 @@ button:disabled{
 .qr-facebook{cursor:pointer}
 </style>
 
+
+<style id="facebook-gate-style">
+#facebookGate{
+  position:fixed; inset:0; z-index:2000; display:none;
+  align-items:center; justify-content:center; padding:18px;
+  background:rgba(0,0,0,.82); backdrop-filter:blur(7px);
+}
+#facebookGate.open{display:flex}
+#facebookGateBox{
+  width:min(440px,94vw); text-align:center; padding:24px 22px;
+  border:1px solid rgba(0,234,255,.7); border-radius:22px;
+  background:linear-gradient(145deg,#07172a,#030812);
+  box-shadow:0 0 35px rgba(0,234,255,.25),0 0 70px rgba(139,44,255,.16);
+}
+#facebookGateBox .gate-icon{font-size:2.6rem;margin-bottom:5px}
+#facebookGateBox h2{margin:0 0 8px;color:#fff;font-size:1.35rem}
+#facebookGateBox p{margin:7px 0;color:#a9c9d8;font-size:.9rem;line-height:1.45}
+#facebookGateBox .gate-note{font-size:.75rem;color:#6f9aaa}
+#facebookGateContinue{
+  width:100%;margin-top:13px;min-height:48px;padding:11px 16px;
+  border:0;border-radius:999px;background:linear-gradient(90deg,#007cff,#00c7ff,#8b2cff);
+  color:#fff;font-weight:800;font-size:.95rem;cursor:pointer;
+}
+.facebook-required-badge{
+  margin:8px auto 0; max-width:420px; padding:9px 12px; text-align:center;
+  border:1px solid rgba(255,214,0,.45); border-radius:12px;
+  color:#ffe66d; background:rgba(255,214,0,.05); font-size:.8rem;
+}
+#facebookGateClose{margin-top:10px;background:none;border:0;color:#79cce0;cursor:pointer;font-size:.78rem}
+#girar:disabled{cursor:not-allowed;filter:saturate(.45);opacity:.7}
+</style>
+
 </head>
 
 <body>
+
+<div id="facebookGate" aria-hidden="true">
+  <section id="facebookGateBox" role="dialog" aria-modal="true" aria-labelledby="facebookGateTitle">
+    <div class="gate-icon">💙</div>
+    <h2 id="facebookGateTitle">Síguenos en Facebook</h2>
+    <p>Antes de realizar tu único giro, visita la página oficial de <strong>MARYNEL</strong>.</p>
+    <p><strong>Haz clic en el código QR</strong> de Facebook que aparece en la página y, al entrar a Facebook, podrás darle <strong>Me gusta / Seguir</strong>.</p>
+    <p class="gate-note">Después de abrir Facebook, regresa aquí y pulsa “Continuar”.</p>
+    <button id="facebookGateContinue" type="button">CONTINUAR</button>
+    <button id="facebookGateClose" type="button">Cerrar</button>
+  </section>
+</div>
+
 
 <div id="participantOverlay" aria-hidden="true">
   <section id="participantBox" role="dialog" aria-modal="true" aria-labelledby="participantTitle">
@@ -778,6 +823,7 @@ if (!ctx) {
 const STORAGE_CONFIG = "marynel_ruleta_config";
 const STORAGE_GIRO = "marynel_ruleta_giro_realizado_v1";
 const STORAGE_PARTICIPANTE = "marynel_ruleta_participante_v1";
+const STORAGE_FACEBOOK_CLICK = "marynel_ruleta_facebook_click_v1";
 
 const DEFAULT_PREMIOS = [
     ["Gracias por participar", 30],
@@ -910,6 +956,45 @@ participantContinue?.addEventListener("click", guardarParticipante);
 [participantName, participantSurname].forEach(input => input?.addEventListener("keydown", e => {
     if(e.key === "Enter") guardarParticipante();
 }));
+
+
+const facebookGate = document.getElementById("facebookGate");
+const facebookGateContinue = document.getElementById("facebookGateContinue");
+const facebookGateClose = document.getElementById("facebookGateClose");
+let facebookVisitRegistered = readStorage(STORAGE_FACEBOOK_CLICK) === "1";
+
+function abrirFacebookGate(){
+    if(!facebookGate) return;
+    facebookGate.classList.add("open");
+    facebookGate.setAttribute("aria-hidden","false");
+}
+
+function cerrarFacebookGate(){
+    facebookGate?.classList.remove("open");
+    facebookGate?.setAttribute("aria-hidden","true");
+}
+
+function actualizarBloqueoFacebook(){
+    if(!boton) return;
+    if(!facebookVisitRegistered){
+        boton.disabled = true;
+        boton.textContent = "🔒 SÍGUENOS EN FACEBOOK";
+        resultado.innerHTML = "💙 <strong>Primero visita Facebook MARYNEL para desbloquear tu giro.</strong>";
+    }else{
+        aplicarBloqueo();
+    }
+}
+
+facebookGateContinue?.addEventListener("click", () => {
+    // This records the user's confirmation after opening Facebook.
+    // It does NOT claim that Facebook verified a Like/Follow.
+    facebookVisitRegistered = true;
+    writeStorage(STORAGE_FACEBOOK_CLICK, "1");
+    cerrarFacebookGate();
+    actualizarBloqueoFacebook();
+});
+
+facebookGateClose?.addEventListener("click", cerrarFacebookGate);
 
 const adminToggle = document.getElementById("adminToggle");
 const adminOverlay = document.getElementById("adminOverlay");
@@ -1083,6 +1168,10 @@ function girarRuleta() {
         mostrarRegistroParticipante();
         return;
     }
+    if (!facebookVisitRegistered) {
+        abrirFacebookGate();
+        return;
+    }
     if (girando || yaGiro) return;
 
     const indiceGanador = seleccionarPremio();
@@ -1128,6 +1217,17 @@ function girarRuleta() {
     }
     requestAnimationFrame(frame);
 }
+
+
+document.querySelectorAll('a[href*="facebook.com/marynel.av"]').forEach(qrLink => {
+    qrLink.addEventListener("click", () => {
+        // Register that the user clicked the Facebook QR/link.
+        // The external page itself cannot be verified from this static site.
+        facebookVisitRegistered = true;
+        writeStorage(STORAGE_FACEBOOK_CLICK, "1");
+        setTimeout(actualizarBloqueoFacebook, 50);
+    });
+});
 
 boton.addEventListener("click", girarRuleta);
 
@@ -1197,9 +1297,10 @@ document.getElementById("closeWin")?.addEventListener("click", () => {
 
 actualizarDatos();
 ajustarCanvas();
-aplicarBloqueo();
 actualizarParticipanteUI();
 if (!participante) mostrarRegistroParticipante();
+actualizarBloqueoFacebook();
+if (participante && !facebookVisitRegistered) setTimeout(abrirFacebookGate, 250);
 window.addEventListener("resize", ajustarCanvas);
 
 })();
