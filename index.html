@@ -801,6 +801,24 @@ button:disabled{
 .whatsapp-claim-link:hover{filter:brightness(1.08);transform:translateY(-1px)}
 </style>
 
+
+<style id="popup-welcome-admin-style">
+.popup-welcome-title{
+  margin:0 0 12px;
+  padding:0 4px;
+  text-align:center;
+  font-size:clamp(1.25rem,4.8vw,1.8rem);
+  line-height:1.12;
+  font-weight:900;
+  letter-spacing:.5px;
+  background:linear-gradient(90deg,#ffffff,#64eaff,#ffffff);
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+  text-shadow:0 0 12px rgba(0,234,255,.35);
+}
+</style>
+
 </head>
 
 <body>
@@ -813,6 +831,9 @@ button:disabled{
 
 <div id="facebookGate" aria-hidden="true">
   <section id="facebookGateBox" role="dialog" aria-modal="true" aria-labelledby="facebookGateTitle">
+    
+<div class="popup-welcome-title">✨ BIENVENIDO A LA RULETA MARYNEL ✨</div>
+
     <div class="gate-icon">💙</div>
     <h2 id="facebookGateTitle">Síguenos en Facebook</h2>
     <p>Antes de realizar tu único giro, visita la página oficial de <strong>MARYNEL</strong>.</p>
@@ -837,7 +858,7 @@ button:disabled{
 </div>
 
 <div class="contenedor">
-<button class="admin-toggle" id="adminToggle" type="button">⚙️ Administración</button>
+<button class="admin-toggle" id="adminToggle" aria-label="Administración" title="Administración" type="button">⚙️</button>
 
 <div class="admin-overlay" id="adminOverlay" aria-hidden="true">
   <section class="admin-panel" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
