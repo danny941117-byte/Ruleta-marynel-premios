@@ -365,6 +365,48 @@ button:disabled{
     box-shadow:0 0 8px rgba(0,234,255,.7);
 }
 
+
+.admin-toggle{
+    position:fixed; top:16px; right:16px; z-index:30;
+    margin:0; min-height:auto; padding:9px 14px;
+    border:1px solid rgba(0,234,255,.65); border-radius:12px;
+    background:rgba(3,8,20,.82); color:#dff9ff; font-size:.78rem;
+    box-shadow:0 0 14px rgba(0,234,255,.22); backdrop-filter:blur(10px);
+}
+.admin-toggle:hover:not(:disabled){transform:none;}
+.admin-overlay{
+    display:none; position:fixed; inset:0; z-index:50;
+    background:rgba(0,0,0,.72); backdrop-filter:blur(5px);
+    align-items:center; justify-content:center; padding:16px;
+}
+.admin-overlay.open{display:flex;}
+.admin-panel{
+    width:min(720px,96vw); max-height:90vh; overflow:auto;
+    padding:22px; border:1px solid rgba(0,234,255,.55); border-radius:22px;
+    background:linear-gradient(145deg,#071426,#030814 70%);
+    box-shadow:0 0 25px rgba(0,234,255,.2),0 0 55px rgba(168,85,247,.18);
+    text-align:left;
+}
+.admin-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;}
+.admin-head h2{margin:0;color:#fff;font-size:1.3rem;}
+.admin-close{margin:0;min-height:auto;padding:7px 11px;background:rgba(255,255,255,.08);}
+.admin-help{color:#8faabd;font-size:.82rem;margin:0 0 14px;}
+.admin-list{display:grid;gap:9px;}
+.admin-row{display:grid;grid-template-columns:1fr 90px 42px;gap:8px;align-items:center;}
+.admin-row input{width:100%;padding:10px 11px;border:1px solid rgba(0,234,255,.28);border-radius:10px;background:#020914;color:#fff;outline:none;}
+.admin-row input:focus{border-color:#00eaff;box-shadow:0 0 10px rgba(0,234,255,.18);}
+.admin-remove{margin:0;min-height:auto;padding:9px;background:rgba(255,22,143,.12);border-color:rgba(255,22,143,.45);}
+.admin-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px;}
+.admin-actions button{margin:0;min-height:auto;padding:10px 15px;}
+.admin-save{background:linear-gradient(90deg,#007cff,#00bfff);}
+.admin-secondary{background:rgba(255,255,255,.08);}
+.admin-danger{background:linear-gradient(90deg,#7b173e,#b51c61);}
+.admin-status{margin-top:12px;color:#20f08a;font-size:.8rem;min-height:18px;}
+.admin-spins{margin-top:16px;padding:12px;border:1px solid rgba(255,212,0,.35);border-radius:12px;background:rgba(255,212,0,.05);}
+.admin-spins label{display:block;color:#ffd400;font-size:.8rem;font-weight:800;margin-bottom:7px;}
+.admin-spins input{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,212,0,.4);background:#020914;color:#fff;}
+@media(max-width:480px){.admin-row{grid-template-columns:1fr 68px 38px}.admin-panel{padding:16px}.admin-toggle{top:10px;right:10px}}
+
 @media(max-width:850px){
    .experiencia{
         grid-template-columns:minmax(110px,34vw) minmax(0,1fr);
@@ -471,6 +513,29 @@ button:disabled{
 
 <body>
 <div class="contenedor">
+<button class="admin-toggle" id="adminToggle" type="button">⚙️ Administración</button>
+
+<div class="admin-overlay" id="adminOverlay" aria-hidden="true">
+  <section class="admin-panel" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+    <div class="admin-head">
+      <h2 id="adminTitle">⚙️ Panel de administración</h2>
+      <button class="admin-close" id="adminClose" type="button">✕</button>
+    </div>
+    <p class="admin-help">Cambia los premios y su peso de probabilidad. Todo se guarda en este navegador.</p>
+    <div class="admin-list" id="adminList"></div>
+    <div class="admin-actions">
+      <button class="admin-secondary" id="addPrize" type="button">＋ Agregar premio</button>
+      <button class="admin-save" id="saveConfig" type="button">💾 Guardar configuración</button>
+      <button class="admin-danger" id="resetConfig" type="button">↺ Restablecer</button>
+    </div>
+    <div class="admin-spins">
+      <label for="spinLimit">Giros disponibles</label>
+      <input id="spinLimit" type="number" min="1" max="999" value="1">
+    </div>
+    <div class="admin-status" id="adminStatus"></div>
+  </section>
+</div>
+
 
     <header class="encabezado">
         <div class="marca">✦ MARYNEL • INNOVACIÓN • MOVIMIENTO • FUTURO ✦</div>
@@ -531,52 +596,102 @@ const ctx = canvas.getContext("2d");
 const boton = document.getElementById("girar");
 const resultado = document.getElementById("resultado");
 
-const premios = [
-    "Gracias por participar",
-    "10% de descuento",
-    "Gracias por participar",
-    "15% de descuento",
-    "1 vidrio templado plano",
-    "Gracias por participar",
-    "20% de descuento",
-    "1 blusa",
-    "Gracias por participar",
-    "30% de descuento",
-    "1 vidrio templado plano",
-    "Gracias por participar",
-    "40% de descuento",
-    "1 audífono Bluetooth",
-    "50% de descuento",
-    "5% de descuento",
-    "25% de descuento"
+const DEFAULT_PREMIOS = [
+    ["Gracias por participar", 30],
+    ["10% de descuento", 8],
+    ["Gracias por participar", 25],
+    ["15% de descuento", 7],
+    ["1 vidrio templado plano", 5],
+    ["Gracias por participar", 20],
+    ["20% de descuento", 5],
+    ["1 blusa", 2],
+    ["Gracias por participar", 18],
+    ["30% de descuento", 4],
+    ["1 vidrio templado plano", 4],
+    ["Gracias por participar", 16],
+    ["40% de descuento", 3],
+    ["1 audífono Bluetooth", 1],
+    ["50% de descuento", 1],
+    ["5% de descuento", 8],
+    ["25% de descuento", 5]
 ];
 
-const colores = [
-    "#00eaff",
-    "#ff168f",
-    "#20f08a",
-    "#a855f7",
-    "#ff7a00",
-    "#ffe600",
-    "#168cff",
-    "#00d9a6",
-    "#ff315b",
-    "#7b61ff",
-    "#00b7ff",
-    "#ff3d81",
-    "#7cff00",
-    "#ff9f00",
-    "#d946ef",
-    "#00e5ff",
-    "#ffcc00"
-];
-
-const cantidad = premios.length;
-const angulo = (2 * Math.PI) / cantidad;
-
+let config = cargarConfig();
+let premios = config.premios.map(x => x.nombre);
+let pesos = config.premios.map(x => Math.max(0.01, Number(x.peso) || 1));
+let cantidad = premios.length;
 let rotacion = 0;
 let girando = false;
 let yaGiro = false;
+let girosDisponibles = Math.max(1, Number(config.giros) || 1);
+
+const adminToggle = document.getElementById("adminToggle");
+const adminOverlay = document.getElementById("adminOverlay");
+const adminClose = document.getElementById("adminClose");
+const adminList = document.getElementById("adminList");
+const addPrize = document.getElementById("addPrize");
+const saveConfig = document.getElementById("saveConfig");
+const resetConfig = document.getElementById("resetConfig");
+const adminStatus = document.getElementById("adminStatus");
+const spinLimit = document.getElementById("spinLimit");
+spinLimit.value = girosDisponibles;
+
+function cargarConfig(){
+    try{
+        const guardada = JSON.parse(localStorage.getItem("marynel_ruleta_config"));
+        if(guardada && Array.isArray(guardada.premios) && guardada.premios.length){
+            return {premios: guardada.premios, giros: guardada.giros || 1};
+        }
+    }catch(e){}
+    return {premios: DEFAULT_PREMIOS.map(([nombre,peso])=>({nombre,peso})), giros:1};
+}
+
+function guardarLocal(){
+    localStorage.setItem("marynel_ruleta_config", JSON.stringify(config));
+}
+
+function reconstruirDatos(){
+    premios = config.premios.map(x => x.nombre);
+    pesos = config.premios.map(x => Math.max(0.01, Number(x.peso) || 1));
+    cantidad = premios.length;
+}
+
+function renderAdmin(){
+    adminList.innerHTML = "";
+    config.premios.forEach((p,i)=>{
+        const row=document.createElement("div"); row.className="admin-row";
+        row.innerHTML=`<input class="prize-name" data-i="${i}" value="${escapeHtml(p.nombre)}" aria-label="Premio ${i+1}">
+                       <input class="prize-weight" data-i="${i}" type="number" min="0.1" step="0.1" value="${Number(p.peso)||1}" aria-label="Probabilidad ${i+1}">
+                       <button class="admin-remove" type="button" data-remove="${i}" title="Eliminar">✕</button>`;
+        adminList.appendChild(row);
+    });
+}
+
+function escapeHtml(v){
+    return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+function leerFormulario(){
+    const nombres=[...document.querySelectorAll(".prize-name")];
+    const pesosInputs=[...document.querySelectorAll(".prize-weight")];
+    config.premios=nombres.map((el,i)=>({nombre:el.value.trim()||"Gracias por participar",peso:Math.max(.1,Number(pesosInputs[i].value)||1)}));
+    config.giros=Math.max(1,Math.min(999,Number(spinLimit.value)||1));
+    reconstruirDatos();
+}
+
+adminToggle.addEventListener("click",()=>{renderAdmin();adminOverlay.classList.add("open");adminOverlay.setAttribute("aria-hidden","false");});
+adminClose.addEventListener("click",()=>{adminOverlay.classList.remove("open");adminOverlay.setAttribute("aria-hidden","true");});
+adminOverlay.addEventListener("click",e=>{if(e.target===adminOverlay) adminClose.click();});
+addPrize.addEventListener("click",()=>{leerFormulario();config.premios.push({nombre:"Nuevo premio",peso:1});renderAdmin();});
+adminList.addEventListener("click",e=>{const b=e.target.closest("[data-remove]");if(!b)return;leerFormulario();config.premios.splice(Number(b.dataset.remove),1);if(!config.premios.length)config.premios.push({nombre:"Gracias por participar",peso:1});renderAdmin();});
+saveConfig.addEventListener("click",()=>{leerFormulario();guardarLocal();yaGiro=false;girando=false;boton.disabled=false;boton.textContent="🎡 GIRAR";resultado.textContent="";rotacion=0;ajustarCanvasDensidad();adminStatus.textContent="✓ Configuración guardada en este dispositivo.";});
+resetConfig.addEventListener("click",()=>{config={premios:DEFAULT_PREMIOS.map(([nombre,peso])=>({nombre,peso})),giros:1};spinLimit.value=1;guardarLocal();reconstruirDatos();renderAdmin();yaGiro=false;girando=false;boton.disabled=false;boton.textContent="🎡 GIRAR";resultado.textContent="";rotacion=0;ajustarCanvasDensidad();adminStatus.textContent="✓ Configuración restablecida.";});
+
+function obtenerAngulos(){
+    const total=pesos.reduce((a,b)=>a+b,0);
+    let acumulado=0;
+    return pesos.map(p=>{const inicio=acumulado/total*Math.PI*2; acumulado+=p; const fin=acumulado/total*Math.PI*2; return {inicio,fin,medio:(inicio+fin)/2};});
+}
 
 function ajustarCanvasDensidad() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -596,9 +711,11 @@ function dibujarRuleta() {
 
     ctx.clearRect(0, 0, size, size);
 
+    const segmentos = obtenerAngulos();
     for (let i = 0; i < cantidad; i++) {
-        const inicio = rotacion + i * angulo;
-        const fin = inicio + angulo;
+        const inicio = rotacion + segmentos[i].inicio;
+        const fin = rotacion + segmentos[i].fin;
+        const medio = rotacion + segmentos[i].medio;
 
         ctx.beginPath();
         ctx.moveTo(centro, centro);
@@ -614,7 +731,7 @@ function dibujarRuleta() {
 
         ctx.save();
         ctx.translate(centro, centro);
-        ctx.rotate(inicio + angulo / 2);
+        ctx.rotate(medio);
 
         ctx.fillStyle = "#fff";
         ctx.font = "800 18px Arial";
@@ -650,9 +767,10 @@ function dibujarRuleta() {
 }
 
 function girarRuleta() {
-    if (yaGiro || girando) return;
+    if (girando || girosDisponibles <= 0) return;
 
-    yaGiro = true;
+    girosDisponibles--;
+    yaGiro = girosDisponibles <= 0;
     girando = true;
 
     boton.disabled = true;
@@ -683,7 +801,7 @@ function girarRuleta() {
             requestAnimationFrame(animar);
         } else {
             girando = false;
-            boton.textContent = "🔒 YA PARTICIPASTE";
+            boton.textContent = girosDisponibles > 0 ? "🎡 GIRAR OTRA VEZ" : "🔒 YA PARTICIPASTE";
             mostrarPremio();
         }
     }
@@ -698,7 +816,9 @@ function mostrarPremio() {
     const posicion =
         ((anguloPuntero - rotacion) % dosPi + dosPi) % dosPi;
 
-    const indice = Math.floor(posicion / angulo);
+    const segmentos = obtenerAngulos();
+    let indice = segmentos.findIndex(s => posicion >= s.inicio && posicion < s.fin);
+    if(indice < 0) indice = cantidad - 1;
     const premio = premios[indice];
 
     if (premio === "Gracias por participar") {
