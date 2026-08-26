@@ -735,7 +735,16 @@ function leerFormulario(){
     reconstruirDatos();
 }
 
-adminToggle.addEventListener("click",()=>{renderAdmin();adminOverlay.classList.add("open");adminOverlay.setAttribute("aria-hidden","false");});
+adminToggle.addEventListener("click",()=>{
+    const clave = prompt("🔐 Administración MARYNEL\n\nIngresa la contraseña:");
+    if(clave === "2425"){
+        renderAdmin();
+        adminOverlay.classList.add("open");
+        adminOverlay.setAttribute("aria-hidden","false");
+    }else if(clave !== null){
+        alert("❌ Contraseña incorrecta.");
+    }
+});
 adminClose.addEventListener("click",()=>{adminOverlay.classList.remove("open");adminOverlay.setAttribute("aria-hidden","true");});
 adminOverlay.addEventListener("click",e=>{if(e.target===adminOverlay) adminClose.click();});
 addPrize.addEventListener("click",()=>{leerFormulario();config.premios.push({nombre:"Nuevo premio",peso:1});renderAdmin();});
