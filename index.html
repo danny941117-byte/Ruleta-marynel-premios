@@ -1017,6 +1017,34 @@ canvas#ruleta{
 }
 </style>
 
+
+<style id="vivid-neon-text-style">
+#resultado{
+  color:#FFFFFF !important;
+  font-weight:900 !important;
+  text-shadow:
+    0 0 5px rgba(255,255,255,.95),
+    0 0 12px rgba(0,234,255,.75),
+    0 0 24px rgba(255,20,147,.45) !important;
+}
+#resultado.gracias-resultado{
+  color:#FFE600 !important;
+  font-size:clamp(1.25rem,4vw,1.8rem) !important;
+  text-shadow:
+    0 0 5px #FFF,
+    0 0 12px #FFE600,
+    0 0 25px rgba(255,20,147,.72) !important;
+}
+#resultado.premio-resultado{
+  color:#FFFFFF !important;
+  font-size:clamp(1.3rem,4.2vw,1.9rem) !important;
+  text-shadow:
+    0 0 5px #FFF,
+    0 0 12px #00E5FF,
+    0 0 24px #FF1493 !important;
+}
+</style>
+
 </head>
 
 <body>
@@ -1231,10 +1259,10 @@ const DEFAULT_PREMIOS = [
 ];
 
 const colores = [
-    "#6EE7FF","#FF8FCB","#7EF5B4","#C7A6FF","#FFB36B",
-    "#FFE88A","#7FB9FF","#73E8D0","#FF8FA8","#B9A7FF",
-    "#7DDCFF","#FF9BC8","#B6F57A","#FFC47A","#E6A6FF",
-    "#8FEAFF","#FFE58A"
+    "#00E5FF","#FF1493","#00F5A0","#8A2BE2","#FF6A00",
+    "#FFD400","#1677FF","#00D9B7","#FF2D55","#6C2BFF",
+    "#00B8FF","#FF2BB5","#7CFF00","#FF9500","#D500F9",
+    "#00F0FF","#FFEA00"
 ];
 
 function readStorage(key) {
@@ -1498,17 +1526,17 @@ function dibujarRuleta() {
         ctx.fillStyle = colores[i % colores.length];
         ctx.fill();
 
-        ctx.strokeStyle = "rgba(255,255,255,.96)";
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(255,255,255,1)";
+        ctx.lineWidth = 3.5;
         ctx.stroke();
 
         ctx.save();
         ctx.translate(centro, centro);
         ctx.rotate(medio);
-        ctx.fillStyle = "#fff";
-        ctx.shadowColor = "rgba(0,0,0,.65)";
-        ctx.shadowBlur = 5;
-        ctx.font = premios[i].length > 22 ? "800 13px Arial" : "800 17px Arial";
+        ctx.fillStyle = "#FFFFFF";
+        ctx.shadowColor = "rgba(0,0,0,.95)";
+        ctx.shadowBlur = 8;
+        ctx.font = premios[i].length > 22 ? "900 14px Arial" : "900 18px Arial";
         ctx.textAlign = "right";
         ctx.textBaseline = "middle";
 
@@ -1540,6 +1568,8 @@ function dibujarRuleta() {
 }
 
 function mostrarPremio(premio) {
+    resultado.classList.toggle("gracias-resultado", premio === "Gracias por participar");
+    resultado.classList.toggle("premio-resultado", premio !== "Gracias por participar");
     if (premio === "Gracias por participar") {
         const claim = document.getElementById("whatsappClaim");
         if (claim) {
