@@ -766,21 +766,20 @@ button:disabled{
 <style id="whatsapp-claim-style">
 .whatsapp-claim{
   display:none;
-  width:min(560px,92%);
-  margin:12px auto 14px;
-  padding:12px 16px;
+  width:min(430px,92%);
+  padding:9px 12px;
   box-sizing:border-box;
-  border:1px solid rgba(37,211,102,.75);
+  border:1px solid rgba(37,211,102,.78);
   border-radius:14px;
-  background:linear-gradient(135deg,rgba(10,55,45,.9),rgba(3,20,28,.92));
-  box-shadow:0 0 18px rgba(37,211,102,.16);
+  background:linear-gradient(135deg,rgba(10,55,45,.96),rgba(3,20,28,.97));
+  box-shadow:0 0 18px rgba(37,211,102,.18);
   text-align:center;
 }
 .whatsapp-claim.show{display:block}
 .whatsapp-claim-text{
-  margin:0 0 9px;
+  margin:0 0 7px;
   color:#fff;
-  font-size:clamp(.9rem,2.7vw,1.05rem);
+  font-size:clamp(.82rem,2.5vw,1rem);
   font-weight:800;
 }
 .whatsapp-claim-link{
@@ -789,16 +788,14 @@ button:disabled{
   justify-content:center;
   gap:7px;
   min-height:40px;
-  padding:9px 16px;
+  padding:8px 16px;
   border-radius:999px;
   background:#25D366;
   color:#06140c;
   text-decoration:none;
   font-weight:900;
-  font-size:.9rem;
-  box-shadow:0 0 14px rgba(37,211,102,.28);
+  font-size:.88rem;
 }
-.whatsapp-claim-link:hover{filter:brightness(1.08);transform:translateY(-1px)}
 </style>
 
 
@@ -816,6 +813,73 @@ button:disabled{
   background-clip:text;
   color:transparent;
   text-shadow:0 0 12px rgba(0,234,255,.35);
+}
+</style>
+
+
+<style id="claim-and-admin-final-layout">
+/* El reclamo queda arriba, visible y al lado de LYRA X7 */
+.experiencia{
+  grid-template-columns:minmax(210px,270px) minmax(320px,1fr);
+  grid-template-rows:auto auto;
+  align-items:start;
+}
+.experiencia > .whatsapp-claim{
+  grid-column:2;
+  grid-row:1;
+  justify-self:center;
+  align-self:start;
+  width:min(430px,92%);
+  margin:0 auto 12px;
+  z-index:20;
+}
+.experiencia > .ruleta-panel{
+  grid-column:2;
+  grid-row:2;
+}
+.experiencia > .avatar-panel{
+  grid-column:1;
+  grid-row:1 / span 2;
+}
+
+/* Botón de administración: solo la tuerquita, pequeño y discreto */
+.admin-toggle{
+  width:42px !important;
+  min-width:42px !important;
+  max-width:42px !important;
+  height:42px !important;
+  min-height:42px !important;
+  padding:0 !important;
+  border-radius:50% !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  font-size:1.15rem !important;
+  line-height:1 !important;
+  overflow:hidden !important;
+}
+
+/* En teléfonos, el reclamo queda inmediatamente visible debajo de LYRA */
+@media (max-width:650px){
+  .experiencia{
+    grid-template-columns:1fr;
+    grid-template-rows:auto auto auto;
+    gap:12px;
+  }
+  .experiencia > .avatar-panel{
+    grid-column:1;
+    grid-row:1;
+  }
+  .experiencia > .whatsapp-claim{
+    grid-column:1;
+    grid-row:2;
+    width:min(430px,92%);
+    margin:0 auto;
+  }
+  .experiencia > .ruleta-panel{
+    grid-column:1;
+    grid-row:3;
+  }
 }
 </style>
 
@@ -899,9 +963,20 @@ button:disabled{
     </header>
 
     <main class="experiencia">
+<div class="whatsapp-claim" id="whatsappClaim" aria-hidden="true">
+  <p class="whatsapp-claim-text">🎉 Felicidades, reclama tu premio al WhatsApp</p>
+  <a class="whatsapp-claim-link"
+     id="whatsappClaimLink"
+     href="#"
+     target="_blank"
+     rel="noopener noreferrer">
+    💬 Reclamar mi premio por WhatsApp
+  </a>
+</div>
 
         <section class="ruleta-panel">
-            <div class="ruleta-contenedor">
+            
+<div class="ruleta-contenedor">
                 <div class="puntero"></div>
                 <canvas id="ruleta" width="700" height="700"></canvas>
             </div>
@@ -946,16 +1021,7 @@ button:disabled{
             </a>
 
             
-<div class="whatsapp-claim" id="whatsappClaim" aria-hidden="true">
-  <p class="whatsapp-claim-text">🎉 Felicidades, reclama tu premio al WhatsApp</p>
-  <a class="whatsapp-claim-link"
-     id="whatsappClaimLink"
-     href="#"
-     target="_blank"
-     rel="noopener noreferrer">
-    💬 Reclamar mi premio por WhatsApp
-  </a>
-</div>
+
 <div class="neon-line"></div>
         </aside>
 
