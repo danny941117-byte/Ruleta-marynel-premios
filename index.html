@@ -700,7 +700,7 @@ async function iniciarAudio(){
     if(!audioCtx){
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         masterGain = audioCtx.createGain();
-        masterGain.gain.value = 0.16;
+        masterGain.gain.value = 0.85;
         masterGain.connect(audioCtx.destination);
     }
     if(audioCtx.state === "suspended") await audioCtx.resume();
