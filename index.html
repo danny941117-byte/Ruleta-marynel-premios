@@ -132,7 +132,7 @@ h1{
     align-items:center;
     justify-content:center;
     font-family:Arial,Helvetica,sans-serif;
-    font-size:clamp(8rem,17vw,13rem);
+    font-size:clamp(7rem,16vw,12rem);
     font-weight:900;
     line-height:1;
     letter-spacing:-.12em;
@@ -143,7 +143,7 @@ h1{
         0 0 24px rgba(0,234,255,.20),
         0 0 48px rgba(22,140,255,.16),
         0 0 72px rgba(168,85,247,.10);
-    opacity:.42;
+    opacity:.28;
     pointer-events:none;
     transform:translateY(2px);
 }
@@ -162,9 +162,7 @@ h1{
     pointer-events:none;
 }
 
-canvas{
-    position:relative;
-    z-index:2;
+canvas{position:relative;z-index:5;
     display:block;
     width:100%;
     height:100%;
@@ -707,11 +705,29 @@ button:disabled{
     </main>
 </div>
 
+
 <script>
+(() => {
+"use strict";
+
 const canvas = document.getElementById("ruleta");
-const ctx = canvas.getContext("2d");
 const boton = document.getElementById("girar");
 const resultado = document.getElementById("resultado");
+
+if (!canvas || !boton || !resultado) {
+    console.error("Ruleta MARYNEL: faltan elementos principales.");
+    return;
+}
+
+const ctx = canvas.getContext("2d");
+if (!ctx) {
+    console.error("Ruleta MARYNEL: el navegador no pudo crear el canvas.");
+    return;
+}
+
+const STORAGE_CONFIG = "marynel_ruleta_config";
+const STORAGE_GIRO = "marynel_ruleta_giro_realizado_v1";
+
 const DEFAULT_PREMIOS = [
     ["Gracias por participar", 30],
     ["10% de descuento", 8],
@@ -732,18 +748,51 @@ const DEFAULT_PREMIOS = [
     ["25% de descuento", 5]
 ];
 
+const colores = [
+    "#00eaff","#ff168f","#20f08a","#a855f7","#ff7a00",
+    "#ffe600","#168cff","#00d9a6","#ff315b","#7b61ff",
+    "#00b7ff","#ff3d81","#7cff00","#ff9f00","#d946ef",
+    "#00e5ff","#ffcc00"
+];
+
+function readStorage(key) {
+    try { return localStorage.getItem(key); }
+    catch (e) { return null; }
+}
+function writeStorage(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) {}
+}
+function removeStorage(key) {
+    try { localStorage.removeItem(key); } catch (e) {}
+}
+
+function cargarConfig() {
+    try {
+        const raw = readStorage(STORAGE_CONFIG);
+        const data = raw ? JSON.parse(raw) : null;
+        if (data && Array.isArray(data.premios) && data.premios.length) {
+            return {
+                premios: data.premios.map(p => ({
+                    nombre: String(p.nombre || "Gracias por participar"),
+                    peso: Math.max(0.1, Number(p.peso) || 1)
+                })),
+                giros: 1
+            };
+        }
+    } catch (e) {}
+    return {
+        premios: DEFAULT_PREMIOS.map(([nombre, peso]) => ({nombre, peso})),
+        giros: 1
+    };
+}
+
 let config = cargarConfig();
-let premios = config.premios.map(x => x.nombre);
-let pesos = config.premios.map(x => Math.max(0.01, Number(x.peso) || 1));
+let premios = config.premios.map(p => p.nombre);
+let pesos = config.premios.map(p => Math.max(0.1, Number(p.peso) || 1));
 let cantidad = premios.length;
 let rotacion = 0;
 let girando = false;
-
-// Bloqueo permanente del giro en este navegador.
-// Actualizar o cerrar la página no libera el giro.
-const CLAVE_GIRO = "marynel_ruleta_giro_realizado_v1";
-let yaGiro = localStorage.getItem(CLAVE_GIRO) === "1";
-let girosDisponibles = yaGiro ? 0 : 1;
+let yaGiro = readStorage(STORAGE_GIRO) === "1";
 
 const adminToggle = document.getElementById("adminToggle");
 const adminOverlay = document.getElementById("adminOverlay");
@@ -754,141 +803,80 @@ const saveConfig = document.getElementById("saveConfig");
 const resetConfig = document.getElementById("resetConfig");
 const adminStatus = document.getElementById("adminStatus");
 const spinLimit = document.getElementById("spinLimit");
-spinLimit.value = 1;
 
-function aplicarBloqueoGiro(){
-    if(yaGiro){
-        girosDisponibles = 0;
-        boton.disabled = true;
-        boton.textContent = "🔒 YA PARTICIPASTE";
-        resultado.innerHTML = "💙 <strong>¡Ya realizaste tu único giro!</strong>";
-    }else{
-        girosDisponibles = 1;
-        boton.disabled = false;
-        boton.textContent = "🎡 GIRAR";
-    }
+function actualizarDatos() {
+    premios = config.premios.map(p => p.nombre);
+    pesos = config.premios.map(p => Math.max(0.1, Number(p.peso) || 1));
+    cantidad = Math.max(1, premios.length);
 }
 
-function cargarConfig(){
-    try{
-        const guardada = JSON.parse(localStorage.getItem("marynel_ruleta_config"));
-        if(guardada && Array.isArray(guardada.premios) && guardada.premios.length){
-            return {premios: guardada.premios, giros: guardada.giros || 1};
-        }
-    }catch(e){}
-    return {premios: DEFAULT_PREMIOS.map(([nombre,peso])=>({nombre,peso})), giros:1};
+function escapar(v) {
+    return String(v).replace(/[&<>"']/g, c => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+    }[c]));
 }
 
-function guardarLocal(){
-    localStorage.setItem("marynel_ruleta_config", JSON.stringify(config));
-}
-
-function reconstruirDatos(){
-    premios = config.premios.map(x => x.nombre);
-    pesos = config.premios.map(x => Math.max(0.01, Number(x.peso) || 1));
-    cantidad = premios.length;
-}
-
-function renderAdmin(){
+function renderAdmin() {
+    if (!adminList) return;
     adminList.innerHTML = "";
-    config.premios.forEach((p,i)=>{
-        const row=document.createElement("div"); row.className="admin-row";
-        row.innerHTML=`<input class="prize-name" data-i="${i}" value="${escapeHtml(p.nombre)}" aria-label="Premio ${i+1}">
-                       <input class="prize-weight" data-i="${i}" type="number" min="0.1" step="0.1" value="${Number(p.peso)||1}" aria-label="Probabilidad ${i+1}">
-                       <button class="admin-remove" type="button" data-remove="${i}" title="Eliminar">✕</button>`;
+    config.premios.forEach((p, i) => {
+        const row = document.createElement("div");
+        row.className = "admin-row";
+        row.innerHTML =
+            '<input class="prize-name" data-i="'+i+'" value="'+escapar(p.nombre)+'" aria-label="Premio '+(i+1)+'">' +
+            '<input class="prize-weight" data-i="'+i+'" type="number" min="0.1" step="0.1" value="'+(Number(p.peso)||1)+'" aria-label="Probabilidad '+(i+1)+'">' +
+            '<button class="admin-remove" type="button" data-remove="'+i+'" title="Eliminar">✕</button>';
         adminList.appendChild(row);
     });
 }
 
-function escapeHtml(v){
-    return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-}
-
-function leerFormulario(){
-    const nombres=[...document.querySelectorAll(".prize-name")];
-    const pesosInputs=[...document.querySelectorAll(".prize-weight")];
-    config.premios=nombres.map((el,i)=>({nombre:el.value.trim()||"Gracias por participar",peso:Math.max(.1,Number(pesosInputs[i].value)||1)}));
-    config.giros=Math.max(1,Math.min(999,Number(spinLimit.value)||1));
-    reconstruirDatos();
-}
-
-adminToggle.addEventListener("click",()=>{
-    const clave = prompt("🔐 Administración MARYNEL\n\nIngresa la contraseña:");
-    if(clave === "2425"){
-        renderAdmin();
-        adminOverlay.classList.add("open");
-        adminOverlay.setAttribute("aria-hidden","false");
-    }else if(clave !== null){
-        alert("❌ Contraseña incorrecta.");
-    }
-});
-adminClose.addEventListener("click",()=>{adminOverlay.classList.remove("open");adminOverlay.setAttribute("aria-hidden","true");});
-adminOverlay.addEventListener("click",e=>{if(e.target===adminOverlay) adminClose.click();});
-addPrize.addEventListener("click",()=>{leerFormulario();config.premios.push({nombre:"Nuevo premio",peso:1});renderAdmin();});
-adminList.addEventListener("click",e=>{const b=e.target.closest("[data-remove]");if(!b)return;leerFormulario();config.premios.splice(Number(b.dataset.remove),1);if(!config.premios.length)config.premios.push({nombre:"Gracias por participar",peso:1});renderAdmin();});
-saveConfig.addEventListener("click",()=>{
-    leerFormulario();
+function leerFormulario() {
+    if (!adminList) return;
+    const nombres = [...adminList.querySelectorAll(".prize-name")];
+    const valores = [...adminList.querySelectorAll(".prize-weight")];
+    config.premios = nombres.map((el, i) => ({
+        nombre: el.value.trim() || "Gracias por participar",
+        peso: Math.max(0.1, Number(valores[i]?.value) || 1)
+    }));
     config.giros = 1;
-    spinLimit.value = 1;
-    guardarLocal();
-    girando = false;
-    resultado.textContent = "";
-    rotacion = 0;
-    ajustarCanvasDensidad();
-    aplicarBloqueoGiro();
-    adminStatus.textContent="✓ Configuración guardada. El giro ya realizado no se reinicia al actualizar.";
-});
-resetConfig.addEventListener("click",()=>{
-    config={premios:DEFAULT_PREMIOS.map(([nombre,peso])=>({nombre,peso})),giros:1};
-    spinLimit.value=1;
-    guardarLocal();
-    reconstruirDatos();
-    renderAdmin();
-    // Restablecer es una acción administrativa deliberada: vuelve a habilitar un giro.
-    localStorage.removeItem(CLAVE_GIRO);
-    yaGiro=false;
-    girando=false;
-    girosDisponibles=1;
-    boton.disabled=false;
-    boton.textContent="🎡 GIRAR";
-    resultado.textContent="";
-    rotacion=0;
-    ajustarCanvasDensidad();
-    adminStatus.textContent="✓ Configuración restablecida y giro habilitado.";
-});
-
-// La rueda se dibuja con segmentos visualmente iguales.
-// Las probabilidades se aplican por separado al seleccionar el resultado.
-function obtenerAngulos(){
-    const angulo = (Math.PI * 2) / Math.max(1, cantidad);
-    return Array.from({length:cantidad}, (_,i)=>{
-        const inicio = i * angulo;
-        const fin = inicio + angulo;
-        return {inicio, fin, medio:(inicio + fin) / 2};
-    });
+    actualizarDatos();
 }
 
-function seleccionarPremioPonderado(){
-    const total = pesos.reduce((a,b)=>a+b,0);
-    if(total <= 0) return Math.floor(Math.random() * cantidad);
+function guardarConfig() {
+    writeStorage(STORAGE_CONFIG, JSON.stringify(config));
+}
+
+function aplicarBloqueo() {
+    yaGiro = readStorage(STORAGE_GIRO) === "1";
+    boton.disabled = yaGiro || girando;
+    boton.textContent = yaGiro ? "🔒 YA PARTICIPASTE" : "🎡 GIRAR";
+    if (yaGiro) {
+        resultado.innerHTML = "💙 <strong>¡Ya realizaste tu único giro!</strong>";
+    }
+}
+
+function obtenerAngulos() {
+    const paso = (Math.PI * 2) / cantidad;
+    return Array.from({length: cantidad}, (_, i) => ({
+        inicio: i * paso,
+        fin: (i + 1) * paso,
+        medio: (i + 0.5) * paso
+    }));
+}
+
+function seleccionarPremio() {
+    const total = pesos.reduce((a,b) => a + b, 0);
     let objetivo = Math.random() * total;
-    for(let i=0;i<pesos.length;i++){
+    for (let i = 0; i < pesos.length; i++) {
         objetivo -= pesos[i];
-        if(objetivo <= 0) return i;
+        if (objetivo <= 0) return i;
     }
     return cantidad - 1;
 }
 
-const colores = [
-    "#00eaff", "#ff168f", "#20f08a", "#a855f7", "#ff7a00",
-    "#ffe600", "#168cff", "#00d9a6", "#ff315b", "#7b61ff",
-    "#00b7ff", "#ff3d81", "#7cff00", "#ff9f00", "#d946ef",
-    "#00e5ff", "#ffcc00"
-];
-
-function ajustarCanvasDensidad() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+function ajustarCanvas() {
     const size = 700;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = size * dpr;
     canvas.height = size * dpr;
     canvas.style.width = "100%";
@@ -900,11 +888,12 @@ function ajustarCanvasDensidad() {
 function dibujarRuleta() {
     const size = 700;
     const centro = size / 2;
-    const radio = centro - 10;
+    const radio = centro - 12;
 
     ctx.clearRect(0, 0, size, size);
 
     const segmentos = obtenerAngulos();
+
     for (let i = 0; i < cantidad; i++) {
         const inicio = rotacion + segmentos[i].inicio;
         const fin = rotacion + segmentos[i].fin;
@@ -914,39 +903,38 @@ function dibujarRuleta() {
         ctx.moveTo(centro, centro);
         ctx.arc(centro, centro, radio, inicio, fin);
         ctx.closePath();
-
         ctx.fillStyle = colores[i % colores.length];
         ctx.fill();
 
-        ctx.strokeStyle = "rgba(255,255,255,.92)";
+        ctx.strokeStyle = "rgba(255,255,255,.96)";
         ctx.lineWidth = 3;
         ctx.stroke();
 
         ctx.save();
         ctx.translate(centro, centro);
         ctx.rotate(medio);
-
         ctx.fillStyle = "#fff";
-        ctx.font = "800 18px Arial";
+        ctx.shadowColor = "rgba(0,0,0,.65)";
+        ctx.shadowBlur = 5;
+        ctx.font = premios[i].length > 22 ? "800 13px Arial" : "800 17px Arial";
         ctx.textAlign = "right";
         ctx.textBaseline = "middle";
 
-        let texto = premios[i];
-        if (texto === "Gracias por participar") {
-            ctx.font = "800 14px Arial";
-        } else if (texto.length > 22) {
-            ctx.font = "800 14px Arial";
+        const texto = premios[i];
+        if (texto.length > 28) {
+            const mitad = Math.ceil(texto.length / 2);
+            ctx.fillText(texto.slice(0, mitad), radio - 18, -9);
+            ctx.fillText(texto.slice(mitad), radio - 18, 9);
+        } else {
+            ctx.fillText(texto, radio - 18, 0);
         }
-
-        ctx.shadowColor = "rgba(0,0,0,.45)";
-        ctx.shadowBlur = 4;
-        ctx.fillText(texto, radio - 18, 0);
         ctx.restore();
     }
 
+    // Centro
     ctx.beginPath();
-    ctx.arc(centro, centro, 62, 0, Math.PI * 2);
-    ctx.fillStyle = "#07101f";
+    ctx.arc(centro, centro, 64, 0, Math.PI * 2);
+    ctx.fillStyle = "#06101f";
     ctx.fill();
     ctx.strokeStyle = "#fff";
     ctx.lineWidth = 5;
@@ -959,93 +947,134 @@ function dibujarRuleta() {
     ctx.fillText("GIRA", centro, centro);
 }
 
-async function girarRuleta() {
-    if (girando || yaGiro || girosDisponibles <= 0) return;
+function mostrarPremio(premio) {
+    if (premio === "Gracias por participar") {
+        resultado.innerHTML = "💙 <strong>¡Gracias por participar!</strong>";
+    } else {
+        resultado.innerHTML = "🏆 ¡GANASTE!<br><strong>" + escapar(premio) + "</strong>";
+    }
+}
 
+function girarRuleta() {
+    if (girando || yaGiro) return;
 
-    // Se marca antes de iniciar la animación para que una actualización
-    // durante el giro tampoco permita obtener un segundo intento.
-    localStorage.setItem(CLAVE_GIRO, "1");
+    const indiceGanador = seleccionarPremio();
+    const segmentos = obtenerAngulos();
+    const puntero = -Math.PI / 2;
+    const objetivo = puntero - segmentos[indiceGanador].medio;
+    const vueltas = 8 + Math.random() * 3;
+    const inicio = rotacion;
+    const destino = objetivo + Math.ceil((inicio + vueltas * Math.PI * 2 - objetivo) / (Math.PI * 2)) * Math.PI * 2;
+    const duracion = 5200;
+    const t0 = performance.now();
+
+    // Bloquear inmediatamente: actualizar durante la animación tampoco crea otro giro.
     yaGiro = true;
-    girosDisponibles = 0;
+    writeStorage(STORAGE_GIRO, "1");
     girando = true;
-
     boton.disabled = true;
     boton.textContent = "🎡 GIRANDO...";
     resultado.textContent = "✨ La ruleta está girando...";
 
-    // El resultado se decide por los pesos configurados, pero la rueda
-    // conserva segmentos de igual tamaño para mantener una apariencia uniforme.
-    const indiceGanador = seleccionarPremioPonderado();
-    const segmentos = obtenerAngulos();
-    const anguloPuntero = -Math.PI / 2;
-    const medioGanador = segmentos[indiceGanador].medio;
-    const minVueltas = 8 + Math.random() * 5;
-    const inicioRotacion = rotacion;
-    const objetivoBase = anguloPuntero - medioGanador;
-    const vueltasNecesarias = Math.ceil(
-        (inicioRotacion + minVueltas * Math.PI * 2 - objetivoBase) / (Math.PI * 2)
-    );
-    const destino = objetivoBase + vueltasNecesarias * Math.PI * 2;
-    const duracion = 5200;
-    const tiempoInicial = performance.now();
-
-    function animar(tiempoActual) {
-        const progreso = Math.min(
-            (tiempoActual - tiempoInicial) / duracion,
-            1
-        );
-
-        const suavizado = 1 - Math.pow(1 - progreso, 4);
-
-        rotacion =
-            inicioRotacion +
-            (destino - inicioRotacion) * suavizado;
-
+    function frame(now) {
+        const p = Math.min(1, (now - t0) / duracion);
+        const ease = 1 - Math.pow(1 - p, 4);
+        rotacion = inicio + (destino - inicio) * ease;
         dibujarRuleta();
 
-        if (progreso < 1) {
-            requestAnimationFrame(animar);
+        if (p < 1) {
+            requestAnimationFrame(frame);
         } else {
             girando = false;
             boton.textContent = "🔒 YA PARTICIPASTE";
-            mostrarPremio();
+            mostrarPremio(premios[indiceGanador]);
+
+            const win = document.getElementById("winCelebration");
+            const winPrize = document.getElementById("winPrize");
+            if (win && winPrize) {
+                winPrize.textContent = premios[indiceGanador];
+                win.classList.add("show");
+                win.setAttribute("aria-hidden", "false");
+            }
         }
     }
-
-    requestAnimationFrame(animar);
-}
-
-function mostrarPremio() {
-    const dosPi = Math.PI * 2;
-    const anguloPuntero = -Math.PI / 2;
-
-    const posicion =
-        ((anguloPuntero - rotacion) % dosPi + dosPi) % dosPi;
-
-    const segmentos = obtenerAngulos();
-    let indice = segmentos.findIndex(s => posicion >= s.inicio && posicion < s.fin);
-    if(indice < 0) indice = cantidad - 1;
-    const premio = premios[indice];
-
-    if (premio === "Gracias por participar") {
-        resultado.innerHTML =
-            "💙 <strong>¡Gracias por participar!</strong>";
-    } else {
-        resultado.innerHTML =
-            "🏆 ¡GANASTE!<br><strong>" +
-            premio +
-            "</strong>";
-    }
+    requestAnimationFrame(frame);
 }
 
 boton.addEventListener("click", girarRuleta);
 
-window.addEventListener("resize", ajustarCanvasDensidad);
+if (adminToggle) {
+    adminToggle.addEventListener("click", () => {
+        const clave = prompt("🔐 Administración MARYNEL\n\nIngresa la contraseña:");
+        if (clave === "2425") {
+            renderAdmin();
+            if (adminOverlay) {
+                adminOverlay.classList.add("open");
+                adminOverlay.setAttribute("aria-hidden", "false");
+            }
+        } else if (clave !== null) {
+            alert("❌ Contraseña incorrecta.");
+        }
+    });
+}
+if (adminClose) adminClose.addEventListener("click", () => {
+    adminOverlay?.classList.remove("open");
+    adminOverlay?.setAttribute("aria-hidden", "true");
+});
+if (adminOverlay) adminOverlay.addEventListener("click", e => {
+    if (e.target === adminOverlay) adminClose?.click();
+});
+if (addPrize) addPrize.addEventListener("click", () => {
+    leerFormulario();
+    config.premios.push({nombre:"Nuevo premio", peso:1});
+    actualizarDatos();
+    renderAdmin();
+});
+if (adminList) adminList.addEventListener("click", e => {
+    const b = e.target.closest("[data-remove]");
+    if (!b) return;
+    leerFormulario();
+    config.premios.splice(Number(b.dataset.remove), 1);
+    if (!config.premios.length) config.premios.push({nombre:"Gracias por participar",peso:1});
+    actualizarDatos();
+    renderAdmin();
+});
+if (saveConfig) saveConfig.addEventListener("click", () => {
+    leerFormulario();
+    guardarConfig();
+    rotacion = 0;
+    ajustarCanvas();
+    aplicarBloqueo();
+    if (adminStatus) adminStatus.textContent = "✓ Configuración guardada.";
+});
+if (resetConfig) resetConfig.addEventListener("click", () => {
+    config = {premios: DEFAULT_PREMIOS.map(([nombre,peso]) => ({nombre,peso})), giros:1};
+    actualizarDatos();
+    guardarConfig();
+    removeStorage(STORAGE_GIRO);
+    yaGiro = false;
+    girando = false;
+    rotacion = 0;
+    renderAdmin();
+    ajustarCanvas();
+    aplicarBloqueo();
+    if (adminStatus) adminStatus.textContent = "✓ Configuración restablecida y giro habilitado.";
+});
 
-ajustarCanvasDensidad();
-aplicarBloqueoGiro();
+document.getElementById("closeWin")?.addEventListener("click", () => {
+    const win = document.getElementById("winCelebration");
+    win?.classList.remove("show");
+    win?.setAttribute("aria-hidden", "true");
+});
+
+actualizarDatos();
+ajustarCanvas();
+aplicarBloqueo();
+window.addEventListener("resize", ajustarCanvas);
+
+})();
 </script>
+
 
 
 
