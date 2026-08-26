@@ -132,18 +132,18 @@ h1{
     align-items:center;
     justify-content:center;
     font-family:Arial,Helvetica,sans-serif;
-    font-size:clamp(13rem,24vw,18rem);
+    font-size:clamp(8rem,17vw,13rem);
     font-weight:900;
     line-height:1;
     letter-spacing:-.12em;
     color:transparent;
-    -webkit-text-stroke:3px rgba(0,234,255,.22);
+    -webkit-text-stroke:2px rgba(0,234,255,.16);
     text-shadow:
         0 0 8px rgba(0,234,255,.35),
         0 0 24px rgba(0,234,255,.20),
         0 0 48px rgba(22,140,255,.16),
         0 0 72px rgba(168,85,247,.10);
-    opacity:.75;
+    opacity:.42;
     pointer-events:none;
     transform:translateY(2px);
 }
@@ -164,7 +164,7 @@ h1{
 
 canvas{
     position:relative;
-    z-index:1;
+    z-index:2;
     display:block;
     width:100%;
     height:100%;
@@ -589,6 +589,38 @@ button:disabled{
 .audio-toggle{margin:0;min-height:42px;padding:9px 18px;font-size:.82rem;background:rgba(3,8,20,.78);border:1px solid rgba(0,234,255,.45);box-shadow:0 0 12px rgba(0,234,255,.16);}
 .audio-toggle:hover:not(:disabled){transform:scale(1.02);}
 </style>
+
+<style id="mobile-wheel-fix">
+.ruleta-contenedor{
+    width:min(72vw,390px);
+    min-width:260px;
+}
+.ruleta-contenedor canvas{
+    position:relative;
+    z-index:2;
+    display:block;
+}
+.ruleta-contenedor::before{
+    z-index:0;
+    font-size:clamp(7rem,24vw,12rem);
+    opacity:.35;
+}
+.ruleta-contenedor::after{
+    z-index:0;
+}
+@media(max-width:650px){
+    .experiencia{
+        grid-template-columns: minmax(190px, 34vw) minmax(270px, 1fr);
+        gap:10px;
+        max-width:100%;
+    }
+    .ruleta-contenedor{
+        width:min(58vw,360px);
+        min-width:250px;
+    }
+}
+</style>
+
 </head>
 
 <body>
@@ -630,11 +662,7 @@ button:disabled{
                 <div class="puntero"></div>
                 <canvas id="ruleta" width="700" height="700"></canvas>
             </div>
-
-            <div class="audio-controls" aria-label="Controles de audio">
-                </div>
-
-            <button id="girar" type="button">🎡 GIRAR</button>
+<button id="girar" type="button">🎡 GIRAR</button>
 
             <div class="resultado-marco">
                 <div id="resultado" aria-live="polite"></div>
@@ -684,87 +712,6 @@ const canvas = document.getElementById("ruleta");
 const ctx = canvas.getContext("2d");
 const boton = document.getElementById("girar");
 const resultado = document.getElementById("resultado");
-const audioToggle = document.getElementById("audioToggle");
-
-// Audio futurista generado localmente: no necesita archivos externos.
-let audioCtx = null;
-let masterGain = null;
-let musicTimer = null;
-let musicOn = true;
-let musicStep = 0;
-const synthNotes = [220, 277.18, 329.63, 440, 329.63, 277.18, 246.94, 369.99];
-
-async function iniciarAudio(){
-    if(!musicOn) return;
-    if(!audioCtx){
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        masterGain = audioCtx.createGain();
-        masterGain.gain.value = 4.25;
-        masterGain.connect(audioCtx.destination);
-    }
-    if(audioCtx.state === "suspended") await audioCtx.resume();
-    if(!musicTimer) reproducirPulso();
-}
-
-function reproducirPulso(){
-    if(!musicOn || !audioCtx) return;
-    const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(synthNotes[musicStep % synthNotes.length], now);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.18, now + 0.025);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
-    osc.connect(gain).connect(masterGain);
-    osc.start(now);
-    osc.stop(now + 0.45);
-    musicStep++;
-    musicTimer = setTimeout(()=>{ musicTimer=null; reproducirPulso(); }, 500);
-}
-
-function detenerAudio(){
-    if(musicTimer){ clearTimeout(musicTimer); musicTimer=null; }
-    if(masterGain && audioCtx){
-        masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
-        masterGain.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.05);
-    }
-}
-
-function sonidoGiro(){
-    if(!musicOn || !audioCtx) return;
-    const now=audioCtx.currentTime;
-    const osc=audioCtx.createOscillator();
-    const gain=audioCtx.createGain();
-    osc.type="triangle";
-    osc.frequency.setValueAtTime(180,now);
-    osc.frequency.exponentialRampToValueAtTime(720,now+0.22);
-    gain.gain.setValueAtTime(0.0001,now);
-    gain.gain.exponentialRampToValueAtTime(0.34,now+0.025);
-    gain.gain.exponentialRampToValueAtTime(0.0001,now+0.55);
-    osc.connect(gain).connect(masterGain); osc.start(now); osc.stop(now+0.6);
-}
-
-function sonidoPremio(){
-    if(!musicOn || !audioCtx) return;
-    [523.25,659.25,783.99].forEach((f,i)=>{
-        const now=audioCtx.currentTime+i*0.11;
-        const osc=audioCtx.createOscillator(); const gain=audioCtx.createGain();
-        osc.type="sine"; osc.frequency.value=f;
-        gain.gain.setValueAtTime(0.0001,now);
-        gain.gain.exponentialRampToValueAtTime(0.34,now+0.025);
-        gain.gain.exponentialRampToValueAtTime(0.0001,now+0.35);
-        osc.connect(gain).connect(masterGain); osc.start(now); osc.stop(now+0.38);
-    });
-}
-
-audioToggle.addEventListener("click",()=>{
-    musicOn=!musicOn;
-    audioToggle.textContent=musicOn ? "🔊 Música ON" : "🔇 Música OFF";
-    audioToggle.setAttribute("aria-pressed",String(musicOn));
-    if(musicOn) iniciarAudio(); else detenerAudio();
-});
-
 const DEFAULT_PREMIOS = [
     ["Gracias por participar", 30],
     ["10% de descuento", 8],
@@ -1015,8 +962,6 @@ function dibujarRuleta() {
 async function girarRuleta() {
     if (girando || yaGiro || girosDisponibles <= 0) return;
 
-    await iniciarAudio();
-    sonidoGiro();
 
     // Se marca antes de iniciar la animación para que una actualización
     // durante el giro tampoco permita obtener un segundo intento.
@@ -1065,7 +1010,6 @@ async function girarRuleta() {
             girando = false;
             boton.textContent = "🔒 YA PARTICIPASTE";
             mostrarPremio();
-            sonidoPremio();
         }
     }
 
@@ -1103,7 +1047,7 @@ ajustarCanvasDensidad();
 aplicarBloqueoGiro();
 </script>
 
-<!-- Música MARYNEL integrada -->
+
 
 <style id="marynel-upgrades">
 .marynel-features{width:min(920px,94%);margin:18px auto 30px;display:grid;gap:14px}
