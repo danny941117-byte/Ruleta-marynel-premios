@@ -1111,7 +1111,7 @@ canvas#ruleta{
     </a>
     <p class="gate-logo-instruction"><strong>📱 Toca el logo MARYNEL</strong><br>para abrir Facebook en una ventana del navegador.</p>
     <p id="facebookGateStatus" class="gate-note">🔒 Se abrirá Facebook real para que puedas iniciar sesión y dar Me gusta. Después regresa aquí.</p>
-    <button id="facebookGateContinue" type="button">✓ Ya di Me gusta — Continuar</button>
+    <button id="facebookGateContinue" type="button" disabled aria-disabled="true">🔒 Ya di Me gusta — Continuar</button>
   </section>
 </div>
 
@@ -1449,6 +1449,15 @@ const facebookGateContinue = document.getElementById("facebookGateContinue");
 const facebookGateClose = document.getElementById("facebookGateClose");
 let facebookVisitRegistered = readStorage(STORAGE_FACEBOOK_CLICK) === "1";
 
+function actualizarBotonFacebookContinue(){
+    if(!facebookGateContinue) return;
+    facebookGateContinue.disabled = !facebookVisitRegistered;
+    facebookGateContinue.setAttribute("aria-disabled", facebookVisitRegistered ? "false" : "true");
+    facebookGateContinue.textContent = facebookVisitRegistered
+        ? "✓ Ya di Me gusta — Continuar"
+        : "🔒 Primero abre Facebook";
+}
+
 function abrirFacebookGate(){
     if(!facebookGate) return;
     facebookGate.classList.add("open");
@@ -1481,6 +1490,7 @@ gateFacebookQr?.addEventListener("click", (ev) => {
     ev.preventDefault();
     facebookVisitRegistered = true;
     writeStorage(STORAGE_FACEBOOK_CLICK, "1");
+    actualizarBotonFacebookContinue();
 
     // FASE A — abrir Facebook REAL en una ventana/pestaña del navegador.
     // En móviles, Chrome puede convertir el popup en una pestaña; sigue siendo
@@ -1499,7 +1509,10 @@ gateFacebookQr?.addEventListener("click", (ev) => {
 });
 
 
+actualizarBotonFacebookContinue();
+
 facebookGateContinue?.addEventListener("click", () => {
+    if(!facebookVisitRegistered) return;
     facebookVisitRegistered = true;
     writeStorage(STORAGE_FACEBOOK_CLICK, "1");
     cerrarFacebookGate();
@@ -2325,6 +2338,20 @@ window.addEventListener("resize", ajustarCanvas);
   };
 })();
 </script>
+
+
+<style id="marynel-facebook-continue-lock">
+#facebookGateContinue:disabled{
+  opacity:.45 !important;
+  cursor:not-allowed !important;
+  filter:grayscale(.25);
+  pointer-events:none;
+}
+#facebookGateContinue:not(:disabled){
+  opacity:1;
+  cursor:pointer;
+}
+</style>
 
 </body>
 </html>
