@@ -1362,6 +1362,29 @@ function cargarParticipante(){
 
 let participante = cargarParticipante();
 
+  // FASE A — Identidad local del dispositivo/navegador.
+  // Este identificador NO es una prueba de identidad ni sustituye al backend.
+  const STORAGE_CLIENT_ID = "marynel_ruleta_cliente_v2";
+  function generarClientId(){
+    try{
+      if(window.crypto && typeof window.crypto.randomUUID === "function"){
+        return window.crypto.randomUUID();
+      }
+    }catch(e){}
+    return "MAR-" + Date.now().toString(36) + "-" +
+      Math.random().toString(36).slice(2,10) + "-" +
+      Math.random().toString(36).slice(2,10);
+  }
+  function obtenerClientId(){
+    let id = readStorage(STORAGE_CLIENT_ID);
+    if(!id){
+      id = generarClientId();
+      writeStorage(STORAGE_CLIENT_ID, id);
+    }
+    return id;
+  }
+  const clientId = obtenerClientId();
+
 function nombreCompleto(){
     return participante ? (participante.nombre + " " + participante.apellido).trim() : "";
 }
@@ -1624,6 +1647,11 @@ function mostrarPremio(premio) {
 }
 
 function girarRuleta() {
+    // FASE A — Pre-vuelo antifraude local.
+    // El bloqueo real deberá validarse en backend en la siguiente fase.
+    const currentClientId = obtenerClientId();
+    if(!currentClientId) return;
+
     if (!participante) {
         mostrarRegistroParticipante();
         return;
@@ -1845,7 +1873,7 @@ window.addEventListener("resize", ajustarCanvas);
 
   window.addEventListener("marynel:resultado",async function(e){
     const premio=String(e.detail?.premio||"").trim(); if(!premio||BAD.test(premio))return;
-    const detail={premio,participante:e.detail?.participante||null};
+    const detail={premio,participante:e.detail?.participante||null,client_id:clientId};
     if(window.marynelCentralConfigured && window.marynelCentralConfigured()){
       const r=await window.marynelCentralRecordSpin(detail);
       if(r.error){console.error("No se pudo registrar el giro centralmente:",r.error);}
@@ -1875,7 +1903,7 @@ window.addEventListener("resize", ajustarCanvas);
       const r=await window.marynelCentralReset();
       if(r.error){alert("No se pudo reiniciar la base central: "+r.error.message);btn.disabled=false;return;}
     }
-    ["marynel_ruleta_historial_v1","marynel_ruleta_giro_realizado_v1","marynel_ruleta_facebook_click_v1","marynel_ruleta_participante_v1"].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
+    ["marynel_ruleta_historial_v1","marynel_ruleta_giro_realizado_v1","marynel_ruleta_facebook_click_v1","marynel_ruleta_participante_v1","marynel_ruleta_cliente_v2"].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
     if(status)status.textContent="✓ Contadores reiniciados a 0.";
     setTimeout(()=>location.reload(),700);
   });
@@ -2035,5 +2063,10 @@ window.addEventListener("resize", ajustarCanvas);
 
 
 
+<!--
+  MARYNEL RUleta v2 — FASE A
+  Identidad local: client_id persistente por navegador/origen.
+  NOTA: esto no sustituye autenticación ni validación server-side.
+-->
 </body>
 </html>
