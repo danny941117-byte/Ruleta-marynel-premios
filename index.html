@@ -1901,97 +1901,131 @@ window.addEventListener("resize", ajustarCanvas);
 
 
 <style id="lyra-motion-engine-style">
-  .avatar-marco.lyra-motion-ready{will-change:transform;}
+  .avatar-marco.lyra-motion-ready{will-change:transform;transform-origin:50% 78%;}
   .avatar-marco.lyra-excited{filter:drop-shadow(0 0 10px rgba(0,234,255,.42)) drop-shadow(0 0 18px rgba(168,85,247,.20));}
+  .lyra-human-overlay{position:absolute;inset:0;pointer-events:none;z-index:30;overflow:hidden;}
+  .lyra-human-eye{position:absolute;width:6.7%;height:1.8%;border-radius:50%;background:rgba(25,18,18,.92);opacity:0;transform:scaleY(.12);transform-origin:center;}
+  .lyra-human-eye.l{left:34.2%;top:20.5%}.lyra-human-eye.r{left:57.1%;top:20.5%}
+  .avatar-marco.lyra-blink .lyra-human-eye{opacity:1;transform:scaleY(.18);}
+  .lyra-human-mouth{position:absolute;left:45.1%;top:29.3%;width:9.8%;height:2.2%;border-bottom:2px solid rgba(125,42,55,.92);border-radius:0 0 50% 50%;opacity:0;transform-origin:center;}
+  .avatar-marco.lyra-talking .lyra-human-mouth{opacity:.95;animation:lyraHumanTalk .19s ease-in-out infinite alternate;}
+  @keyframes lyraHumanTalk{from{transform:scale(.72,.55)}to{transform:scale(1.02,1.28)}}
   @media (prefers-reduced-motion: reduce){
     .avatar-marco.lyra-motion-ready{transform:none !important;}
+    .avatar-marco.lyra-motion-ready *{animation:none !important;}
   }
 </style>
 
 <script id="lyra-motion-engine">
 (function(){
-  const marco = document.querySelector('.avatar-marco');
-  const avatar = document.querySelector('.avatar-marco img.avatar');
-  const spinBtn = document.getElementById('girar');
-  if(!marco || !avatar) return;
-
-  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(reduce) return;
+  const marco=document.querySelector('.avatar-marco');
+  const avatar=marco?.querySelector('img.avatar');
+  const spinBtn=document.getElementById('girar');
+  if(!marco||!avatar)return;
+  const reduce=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if(reduce)return;
 
   marco.classList.add('lyra-motion-ready');
 
-  let raf = 0;
-  let started = performance.now();
-  let reactionUntil = 0;
-  let waveUntil = 0;
-  let lastWave = 0;
+  // Un único motor: movimiento humano irregular y suave.
+  // La clave es evitar oscilaciones mecánicas: cada gesto tiene duración,
+  // amplitud y pausa ligeramente diferentes.
+  const overlay=document.createElement('div');
+  overlay.className='lyra-human-overlay';
+  const eyeL=document.createElement('span'); eyeL.className='lyra-human-eye l';
+  const eyeR=document.createElement('span'); eyeR.className='lyra-human-eye r';
+  const mouth=document.createElement('span'); mouth.className='lyra-human-mouth';
+  overlay.append(eyeL,eyeR,mouth); marco.appendChild(overlay);
 
-  // Motor único de movimiento de LYRA X7: respiración + balanceo + reacción.
-  function animate(now){
-    const t = (now - started) / 1000;
-    const reaction = now < reactionUntil;
-    const wave = now < waveUntil;
+  let raf=0;
+  let last=performance.now();
+  let phase=0;
+  let nextPosture=performance.now()+1800;
+  let posture={x:0,y:0,rot:0,scale:1};
+  let target={x:0,y:0,rot:0,scale:1};
+  let nextTalk=performance.now()+4500+Math.random()*5000;
+  let talkUntil=0;
+  let nextBlink=performance.now()+1800+Math.random()*3200;
+  let blinkUntil=0;
+  let reactionUntil=0;
 
-    const breathe = Math.sin(t * 1.7) * 1.8;
-    const sway = Math.sin(t * 0.85 + 0.7) * 0.9;
-    const micro = Math.sin(t * 3.2) * 0.25;
-
-    let y = breathe;
-    let x = sway;
-    let rot = micro + Math.sin(t * 0.72) * 0.45;
-    let scale = 1 + Math.sin(t * 1.7) * 0.004;
-
-    if(reaction){
-      const p = Math.min(1, Math.max(0, (reactionUntil - now) / 1500));
-      const pulse = Math.sin((1 - p) * Math.PI * 5) * 1.6;
-      y -= Math.abs(Math.sin((1-p)*Math.PI*2)) * 3;
-      rot += pulse;
-      scale += Math.sin((1-p)*Math.PI*3) * 0.012;
-    }
-
-    if(wave){
-      // Pequeña inclinación juguetona para acompañar el resultado.
-      const q = (now - lastWave) / 900;
-      rot += Math.sin(q * Math.PI * 4) * 2.2;
-      x += Math.sin(q * Math.PI * 2) * 3;
-    }
-
-    marco.style.transform = `translateX(8px) translate3d(${x.toFixed(2)}px,${y.toFixed(2)}px,0) rotate(${rot.toFixed(2)}deg) scale(${scale.toFixed(4)})`;
-    raf = requestAnimationFrame(animate);
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+  function smooth(current,target,rate,dt){
+    return current+(target-current)*(1-Math.exp(-rate*dt));
+  }
+  function choosePosture(now){
+    // Pequeño cambio de apoyo/peso, como una persona quieta de pie.
+    target.x=(Math.random()-.5)*2.4;
+    target.y=-Math.random()*1.8;
+    target.rot=(Math.random()-.5)*1.15;
+    target.scale=1+(Math.random()-.5)*0.006;
+    nextPosture=now+1800+Math.random()*3300;
   }
 
-  raf = requestAnimationFrame(animate);
+  function blink(now){
+    marco.classList.add('lyra-blink');
+    blinkUntil=now+95+Math.random()*55;
+    nextBlink=now+2300+Math.random()*4200;
+  }
 
-  // Reacción al iniciar la ruleta.
-  spinBtn?.addEventListener('click', function(){
-    reactionUntil = performance.now() + 1500;
+  function talk(now){
+    marco.classList.add('lyra-talking');
+    talkUntil=now+450+Math.random()*700;
+    nextTalk=now+5200+Math.random()*8500;
+  }
+
+  function animate(now){
+    const dt=clamp((now-last)/1000,0.001,0.05);
+    last=now;
+    phase+=dt;
+
+    if(now>=nextPosture)choosePosture(now);
+    if(now>=nextBlink && now>blinkUntil)blink(now);
+    if(now>=nextTalk && now>talkUntil)talk(now);
+
+    if(now>=blinkUntil)marco.classList.remove('lyra-blink');
+    if(now>=talkUntil)marco.classList.remove('lyra-talking');
+
+    // Respiración humana: lenta, con una pequeña variación para no parecer un péndulo.
+    const breath=(Math.sin(phase*1.18)+0.24*Math.sin(phase*2.37+1.4))*0.72;
+    const micro=(Math.sin(phase*3.1+0.8)*0.10)+(Math.sin(phase*5.4)*0.05);
+
+    posture.x=smooth(posture.x,target.x,1.9,dt);
+    posture.y=smooth(posture.y,target.y,1.7,dt);
+    posture.rot=smooth(posture.rot,target.rot,1.6,dt);
+    posture.scale=smooth(posture.scale,target.scale,1.5,dt);
+
+    let x=posture.x + Math.sin(phase*.63+1.1)*0.18;
+    let y=posture.y + breath;
+    let rot=posture.rot + micro;
+    let scale=posture.scale + breath*0.0008;
+
+    if(now<reactionUntil){
+      const p=1-(reactionUntil-now)/1500;
+      const settle=Math.sin(p*Math.PI);
+      x+=Math.sin(p*Math.PI*3)*1.15*settle;
+      y-=2.8*settle;
+      rot+=Math.sin(p*Math.PI*2.2)*0.75*settle;
+      scale+=0.007*settle;
+    }
+
+    marco.style.transform=`translateX(8px) translate3d(${x.toFixed(2)}px,${y.toFixed(2)}px,0) rotate(${rot.toFixed(2)}deg) scale(${scale.toFixed(4)})`;
+    raf=requestAnimationFrame(animate);
+  }
+
+  choosePosture(performance.now());
+  raf=requestAnimationFrame(animate);
+
+  spinBtn?.addEventListener('click',function(){
+    reactionUntil=performance.now()+1500;
     marco.classList.add('lyra-excited');
-    setTimeout(() => marco.classList.remove('lyra-excited'), 1700);
+    talk(performance.now());
+    setTimeout(()=>marco.classList.remove('lyra-excited'),1700);
   });
 
-  // Reacción ocasional, para que no quede completamente estática.
-  function randomGesture(){
-    if(document.hidden){
-      setTimeout(randomGesture, 5000);
-      return;
-    }
-    const now = performance.now();
-    if(now > reactionUntil && now > waveUntil){
-      waveUntil = now + 900;
-      lastWave = now;
-    }
-    setTimeout(randomGesture, 9000 + Math.random() * 7000);
-  }
-  setTimeout(randomGesture, 5000);
-
-  // Limpieza si la página cambia de visibilidad.
-  document.addEventListener('visibilitychange', () => {
-    if(document.hidden){
-      cancelAnimationFrame(raf);
-    }else{
-      started = performance.now();
-      raf = requestAnimationFrame(animate);
-    }
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){cancelAnimationFrame(raf);}
+    else{last=performance.now();raf=requestAnimationFrame(animate);}
   });
 })();
 </script>
