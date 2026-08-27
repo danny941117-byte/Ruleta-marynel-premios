@@ -2113,5 +2113,83 @@ window.addEventListener("resize", ajustarCanvas);
 })();
 </script>
 
+
+<style id="marynel-admin-mobile-compact">
+/* Panel admin compacto para móviles */
+@media (max-width: 650px){
+  /* El overlay no necesita ocupar visualmente toda la pantalla. */
+  #adminOverlay{
+    padding:10px !important;
+    align-items:flex-start !important;
+    overflow:auto !important;
+  }
+
+  #adminOverlay .admin-panel,
+  #adminOverlay .admin-box,
+  #adminOverlay .admin-modal,
+  #adminOverlay [role="dialog"]{
+    width:min(94vw, 430px) !important;
+    max-width:430px !important;
+    max-height:88vh !important;
+    margin:4vh auto 0 !important;
+    border-radius:16px !important;
+    padding:12px !important;
+    overflow-y:auto !important;
+    overscroll-behavior:contain;
+  }
+
+  /* Si el panel usa otro contenedor, reducimos sus dimensiones comunes. */
+  #adminOverlay .admin-list,
+  #adminOverlay #adminList{
+    max-height:30vh !important;
+    overflow-y:auto !important;
+  }
+
+  /* Cada premio ocupa menos espacio y es más cómodo de desplazar. */
+  #adminOverlay .admin-list > *,
+  #adminOverlay #adminList > *{
+    padding:7px !important;
+    margin-bottom:6px !important;
+    border-radius:10px !important;
+  }
+
+  #adminOverlay input,
+  #adminOverlay select,
+  #adminOverlay button{
+    min-height:36px !important;
+    font-size:.88rem !important;
+  }
+
+  #adminOverlay h2,
+  #adminOverlay h3{
+    font-size:1rem !important;
+    margin:.35rem 0 .55rem !important;
+  }
+
+  #adminOverlay .admin-header{
+    position:sticky;
+    top:0;
+    z-index:5;
+    padding-bottom:6px !important;
+  }
+
+  #marynelTestMode{
+    padding:8px !important;
+    margin-top:8px !important;
+  }
+
+  #marynelTestMode div{
+    font-size:.72rem !important;
+  }
+
+  #marynelTestMode button{
+    min-height:34px !important;
+    padding:7px 10px !important;
+  }
+}
+
+/* En pantallas grandes conservamos el diseño existente. */
+</style>
+
 </body>
 </html>
