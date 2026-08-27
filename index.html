@@ -2061,5 +2061,95 @@ window.addEventListener("resize", ajustarCanvas);
 })();
 </script>
 
+
+<style id="lyra-motion-fix">
+/* Motor de movimiento robusto: la imagen visible se anima directamente. */
+.avatar-marco.lyra-live-stage{position:relative;}
+.avatar-marco.lyra-live-stage > img.avatar{
+  transform-origin:50% 72%;
+  will-change:transform;
+}
+.avatar-marco.lyra-live-stage .lyra-live-overlay{
+  position:absolute; inset:0; pointer-events:none; z-index:20;
+}
+.avatar-marco.lyra-live-stage .lyra-live-eye{
+  position:absolute; width:7%; height:2.5%; border-radius:50%;
+  background:rgba(25,18,18,.92); opacity:0;
+  transform:scaleY(.15); transform-origin:center;
+}
+.avatar-marco.lyra-live-stage .lyra-live-eye.l{left:34%;top:20.5%}
+.avatar-marco.lyra-live-stage .lyra-live-eye.r{left:57%;top:20.5%}
+.avatar-marco.lyra-live-stage.lyra-blink .lyra-live-eye{opacity:1;transform:scaleY(.18)}
+.avatar-marco.lyra-live-stage .lyra-live-mouth{
+  position:absolute; left:45%; top:29.3%; width:10%; height:2.5%;
+  border-bottom:2px solid rgba(125,42,55,.95); border-radius:0 0 50% 50%;
+  opacity:0; transform-origin:center;
+}
+.avatar-marco.lyra-live-stage.lyra-talk .lyra-live-mouth{
+  opacity:1; animation:lyraLiveMouth .18s ease-in-out infinite alternate;
+}
+@keyframes lyraLiveMouth{from{transform:scale(.7,.55)}to{transform:scale(1.05,1.45)}}
+@keyframes lyraLiveBody{
+  0%,100%{transform:translate3d(0,0,0) rotate(0deg) scale(1)}
+  25%{transform:translate3d(1.5px,-2px,0) rotate(-.65deg) scale(1.006)}
+  50%{transform:translate3d(0,-4px,0) rotate(0deg) scale(1.012)}
+  75%{transform:translate3d(-1.5px,-2px,0) rotate(.65deg) scale(1.006)}
+}
+.avatar-marco.lyra-live-stage > img.avatar.lyra-auto-motion{animation:lyraLiveBody 3.6s ease-in-out infinite}
+.avatar-marco.lyra-live-stage.lyra-excited-live > img.avatar.lyra-auto-motion{animation:lyraLiveExcited .72s ease-in-out 2}
+@keyframes lyraLiveExcited{
+  0%,100%{transform:translate3d(0,0,0) rotate(0) scale(1)}
+  25%{transform:translate3d(-3px,-5px,0) rotate(-1.4deg) scale(1.015)}
+  50%{transform:translate3d(3px,-7px,0) rotate(1.4deg) scale(1.025)}
+  75%{transform:translate3d(-2px,-4px,0) rotate(-.8deg) scale(1.012)}
+}
+</style>
+<script id="lyra-motion-fix-script">
+(function(){
+  const marco=document.querySelector('.avatar-marco');
+  const avatar=marco?.querySelector('img.avatar');
+  const spin=document.getElementById('girar');
+  if(!marco||!avatar||marco.dataset.lyraLiveReady==='1') return;
+  marco.dataset.lyraLiveReady='1';
+  marco.classList.add('lyra-live-stage');
+  avatar.classList.add('lyra-auto-motion');
+
+  // Capas visuales ligeras sobre la imagen base.
+  const overlay=document.createElement('div');
+  overlay.className='lyra-live-overlay';
+  const eyeL=document.createElement('span'); eyeL.className='lyra-live-eye l';
+  const eyeR=document.createElement('span'); eyeR.className='lyra-live-eye r';
+  const mouth=document.createElement('span'); mouth.className='lyra-live-mouth';
+  overlay.append(eyeL,eyeR,mouth); marco.appendChild(overlay);
+
+  let blinkTimer;
+  function blink(){
+    if(document.hidden){ blinkTimer=setTimeout(blink,1800); return; }
+    marco.classList.add('lyra-blink');
+    setTimeout(()=>marco.classList.remove('lyra-blink'),120);
+    blinkTimer=setTimeout(blink,2200+Math.random()*3500);
+  }
+  blinkTimer=setTimeout(blink,1800+Math.random()*2200);
+
+  function talk(ms=900){
+    marco.classList.add('lyra-talk');
+    setTimeout(()=>marco.classList.remove('lyra-talk'),ms);
+  }
+  spin?.addEventListener('click',()=>{
+    avatar.classList.remove('lyra-auto-motion');
+    marco.classList.add('lyra-excited-live');
+    talk(1200);
+    setTimeout(()=>{
+      marco.classList.remove('lyra-excited-live');
+      avatar.classList.add('lyra-auto-motion');
+    },1500);
+  });
+
+  // Movimiento espontáneo para que nunca quede completamente rígida.
+  setInterval(()=>{
+    if(!document.hidden && Math.random()<.45) talk(500+Math.random()*500);
+  },7000);
+})();
+</script>
 </body>
 </html>
