@@ -2220,5 +2220,111 @@ window.addEventListener("resize", ajustarCanvas);
   #facebookGateContinue{min-height:44px;padding:10px 14px;font-size:.9rem;}
 }
 </style>
+
+<script id="marynel-double-click-guard">
+(() => {
+  // FASE A — Protección UX contra doble clic/doble toque.
+  // No sustituye la validación server-side de la Fase B.
+  let marynelSpinLocked = false;
+
+  function getSpinButton(){
+    return document.querySelector('#spinBtn, #girarBtn, #girar, button[data-action="spin"], button[onclick*="girar"]');
+  }
+
+  function setBusy(btn, busy){
+    if(!btn) return;
+    btn.disabled = busy;
+    btn.setAttribute("aria-busy", busy ? "true" : "false");
+    if(busy){
+      btn.dataset.marynelOriginalText = btn.innerHTML;
+      btn.innerHTML = "⏳ GIRANDO…";
+      btn.style.pointerEvents = "none";
+      btn.style.opacity = "0.72";
+    }else{
+      btn.innerHTML = btn.dataset.marynelOriginalText || btn.innerHTML;
+      btn.style.pointerEvents = "";
+      btn.style.opacity = "";
+    }
+  }
+
+  // Capturamos antes de los listeners normales para impedir dos activaciones
+  // producidas por doble toque. Si el primer giro ya empezó, el segundo se cancela.
+  document.addEventListener("click", (event) => {
+    const btn = event.target.closest('#spinBtn, #girarBtn, #girar, button[data-action="spin"], button[onclick*="girar"]');
+    if(!btn) return;
+
+    if(marynelSpinLocked){
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
+    // Solo bloqueamos cuando el botón parece habilitado.
+    if(btn.disabled) return;
+
+    marynelSpinLocked = true;
+    setBusy(btn, true);
+
+    // El motor existente volverá a habilitar el botón al terminar si corresponde.
+    // Este observador permite detectar cuándo el flujo lo habilita de nuevo.
+    const observer = new MutationObserver(() => {
+      if(!btn.disabled && !btn.hasAttribute("aria-busy")){
+        marynelSpinLocked = false;
+        setBusy(btn, false);
+        observer.disconnect();
+      }
+    });
+    observer.observe(btn, {attributes:true, attributeFilter:["disabled","aria-busy"]});
+
+    // Fallback de seguridad UX: si algo falla, no dejamos el botón bloqueado
+    // indefinidamente. El flujo normal de la ruleta termina mucho antes.
+    setTimeout(() => {
+      if(document.body.contains(btn) && btn.disabled){
+        marynelSpinLocked = false;
+        setBusy(btn, false);
+      }
+      observer.disconnect();
+    }, 20000);
+  }, true);
+})();
+</script>
+
+
+<script id="marynel-spin-state-patch">
+(() => {
+  const originalGirar = window.girarRuleta;
+  if(typeof originalGirar !== "function" || window.__marynelSpinPatched) return;
+  window.__marynelSpinPatched = true;
+
+  let running = false;
+  window.girarRuleta = function(...args){
+    if(running) return;
+    running = true;
+    try{
+      const result = originalGirar.apply(this, args);
+      // The existing UI normally disables the button during the animation.
+      // Release the JS guard when the page returns the button to an enabled state.
+      const btn = document.querySelector('#spinBtn, #girarBtn, #girar, button[data-action="spin"], button[onclick*="girar"]');
+      const check = setInterval(() => {
+        if(!document.body.contains(btn)){
+          clearInterval(check);
+          running = false;
+          return;
+        }
+        if(!btn.disabled){
+          clearInterval(check);
+          running = false;
+        }
+      }, 150);
+      setTimeout(() => { clearInterval(check); running = false; }, 20000);
+      return result;
+    }catch(err){
+      running = false;
+      throw err;
+    }
+  };
+})();
+</script>
+
 </body>
 </html>
