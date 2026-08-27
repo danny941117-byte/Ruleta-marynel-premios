@@ -1,6 +1,71 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+
+<script id="marynel-central-db">
+/* ============================================================
+   MARYNEL — BASE CENTRAL
+   Conecta esta página a Supabase. NO uses service_role aquí.
+   ============================================================ */
+window.MARYNEL_DB = {
+  url: "https://TU-PROYECTO.supabase.co",
+  key: "TU_PUBLISHABLE_O_ANON_KEY"
+};
+
+window.marynelCentralConfigured = function(){
+  const c = window.MARYNEL_DB || {};
+  return /^https:\/\/[^\s]+\.supabase\.co$/i.test(c.url || "") &&
+         !!c.key && !/^TU_/i.test(c.key);
+};
+
+window.marynelCentralRpc = async function(fn, body){
+  if (!window.marynelCentralConfigured()) return {data:null,error:new Error("Base central no configurada")};
+  const c=window.MARYNEL_DB;
+  try{
+    const r=await fetch(c.url.replace(/\/$/,"")+"/rest/v1/rpc/"+fn,{
+      method:"POST",
+      headers:{
+        "apikey":c.key,
+        "Authorization":"Bearer "+c.key,
+        "Content-Type":"application/json"
+      },
+      body:JSON.stringify(body||{})
+    });
+    const text=await r.text();
+    let data=null; try{data=text?JSON.parse(text):null;}catch(e){data=text;}
+    if(!r.ok) return {data:null,error:new Error((data&&data.message)||text||("HTTP "+r.status))};
+    return {data,error:null};
+  }catch(e){ return {data:null,error:e}; }
+};
+
+window.marynelClientToken = function(){
+  const k="marynel_ruleta_client_token_v1";
+  try{
+    let v=localStorage.getItem(k);
+    if(!v){ v=(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random().toString(36).slice(2)); localStorage.setItem(k,v); }
+    return v;
+  }catch(e){ return Date.now()+"-"+Math.random().toString(36).slice(2); }
+};
+
+window.marynelCentralRecordSpin = async function(detail){
+  return window.marynelCentralRpc("marynel_record_spin",{
+    p_client_token:window.marynelClientToken(),
+    p_nombre:detail?.participante?.nombre||"",
+    p_apellido:detail?.participante?.apellido||"",
+    p_premio:String(detail?.premio||""),
+    p_facebook_click:true
+  });
+};
+
+window.marynelCentralHistory = async function(){
+  return window.marynelCentralRpc("marynel_admin_history",{p_password:"2425"});
+};
+
+window.marynelCentralReset = async function(){
+  return window.marynelCentralRpc("marynel_admin_reset",{p_password:"2425"});
+};
+</script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ruleta de Premios MARYNEL</title>
@@ -1017,34 +1082,6 @@ canvas#ruleta{
 }
 </style>
 
-
-<style id="vivid-neon-text-style">
-#resultado{
-  color:#FFFFFF !important;
-  font-weight:900 !important;
-  text-shadow:
-    0 0 5px rgba(255,255,255,.95),
-    0 0 12px rgba(0,234,255,.75),
-    0 0 24px rgba(255,20,147,.45) !important;
-}
-#resultado.gracias-resultado{
-  color:#FFE600 !important;
-  font-size:clamp(1.25rem,4vw,1.8rem) !important;
-  text-shadow:
-    0 0 5px #FFF,
-    0 0 12px #FFE600,
-    0 0 25px rgba(255,20,147,.72) !important;
-}
-#resultado.premio-resultado{
-  color:#FFFFFF !important;
-  font-size:clamp(1.3rem,4.2vw,1.9rem) !important;
-  text-shadow:
-    0 0 5px #FFF,
-    0 0 12px #00E5FF,
-    0 0 24px #FF1493 !important;
-}
-</style>
-
 </head>
 
 <body>
@@ -1097,7 +1134,7 @@ canvas#ruleta{
       <h2 id="adminTitle">⚙️ Panel de administración</h2>
       <button class="admin-close" id="adminClose" type="button">✕</button>
     </div>
-    <p class="admin-help">Cambia los premios y su peso de probabilidad. La rueda mantiene segmentos visualmente iguales; el peso se usa para seleccionar el resultado. El giro realizado queda bloqueado aunque se actualice la página. "Restablecer" es la acción administrativa para habilitarlo de nuevo.</p>
+    <p class="admin-help">Cambia los premios y su peso de probabilidad. La rueda mantiene segmentos visualmente iguales; el peso se usa para seleccionar el resultado. El giro realizado queda bloqueado aunque se actualice la página. "Restablecer" es la acción administrativa para habilitarlo de nuevo.</p><div id="centralDbStatus" style="margin:8px 0;color:#8feaff;font-size:.78rem">🌐 Base central: configuración pendiente</div>
     <div class="admin-list" id="adminList"></div>
     <div class="admin-actions">
       <button class="admin-secondary" id="addPrize" type="button">＋ Agregar premio</button>
@@ -1259,10 +1296,10 @@ const DEFAULT_PREMIOS = [
 ];
 
 const colores = [
-    "#00E5FF","#FF1493","#00F5A0","#8A2BE2","#FF6A00",
-    "#FFD400","#1677FF","#00D9B7","#FF2D55","#6C2BFF",
-    "#00B8FF","#FF2BB5","#7CFF00","#FF9500","#D500F9",
-    "#00F0FF","#FFEA00"
+    "#6EE7FF","#FF8FCB","#7EF5B4","#C7A6FF","#FFB36B",
+    "#FFE88A","#7FB9FF","#73E8D0","#FF8FA8","#B9A7FF",
+    "#7DDCFF","#FF9BC8","#B6F57A","#FFC47A","#E6A6FF",
+    "#8FEAFF","#FFE58A"
 ];
 
 function readStorage(key) {
@@ -1526,17 +1563,17 @@ function dibujarRuleta() {
         ctx.fillStyle = colores[i % colores.length];
         ctx.fill();
 
-        ctx.strokeStyle = "rgba(255,255,255,1)";
-        ctx.lineWidth = 3.5;
+        ctx.strokeStyle = "rgba(255,255,255,.96)";
+        ctx.lineWidth = 3;
         ctx.stroke();
 
         ctx.save();
         ctx.translate(centro, centro);
         ctx.rotate(medio);
-        ctx.fillStyle = "#FFFFFF";
-        ctx.shadowColor = "rgba(0,0,0,.95)";
-        ctx.shadowBlur = 8;
-        ctx.font = premios[i].length > 22 ? "900 14px Arial" : "900 18px Arial";
+        ctx.fillStyle = "#fff";
+        ctx.shadowColor = "rgba(0,0,0,.65)";
+        ctx.shadowBlur = 5;
+        ctx.font = premios[i].length > 22 ? "800 13px Arial" : "800 17px Arial";
         ctx.textAlign = "right";
         ctx.textBaseline = "middle";
 
@@ -1568,8 +1605,6 @@ function dibujarRuleta() {
 }
 
 function mostrarPremio(premio) {
-    resultado.classList.toggle("gracias-resultado", premio === "Gracias por participar");
-    resultado.classList.toggle("premio-resultado", premio !== "Gracias por participar");
     if (premio === "Gracias por participar") {
         const claim = document.getElementById("whatsappClaim");
         if (claim) {
@@ -1666,6 +1701,7 @@ if (adminToggle) {
         const clave = prompt("🔐 Administración MARYNEL\n\nIngresa la contraseña:");
         if (clave === "2425") {
             renderAdmin();
+            const dbs=document.getElementById("centralDbStatus"); if(dbs) dbs.textContent=(window.marynelCentralConfigured&&window.marynelCentralConfigured()) ? "🌐 Base central: conectada" : "🌐 Base central: falta configurar Supabase";
             if (adminOverlay) {
                 adminOverlay.classList.add("open");
                 adminOverlay.setAttribute("aria-hidden", "false");
@@ -1784,105 +1820,64 @@ window.addEventListener("resize", ajustarCanvas);
   const KEY="marynel_ruleta_historial_v1";
   const BAD=/^(?:✨\s*)?La ruleta está girando\.{0,3}$/i;
 
-  function read(){
-    try{
-      const h=JSON.parse(localStorage.getItem(KEY)||"[]");
-      return Array.isArray(h)?h:[];
-    }catch(e){return [];}
-  }
+  function localRead(){try{const h=JSON.parse(localStorage.getItem(KEY)||"[]");return Array.isArray(h)?h:[];}catch(e){return [];}}
+  function localClean(){const valid=localRead().filter(x=>x&&x.premio&&!BAD.test(String(x.premio).trim()));try{localStorage.setItem(KEY,JSON.stringify(valid.slice(0,50)));}catch(e){}return valid;}
+  function esc(s){return String(s).replace(/[&<>"']/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m];});}
 
-  function cleanHistory(){
-    const valid=read().filter(x=>x && x.premio && !BAD.test(String(x.premio).trim()));
-    localStorage.setItem(KEY,JSON.stringify(valid.slice(0,50)));
-    return valid;
-  }
-
-  function esc(s){
-    return String(s).replace(/[&<>"']/g,function(m){
-      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m];
-    });
-  }
-
-  function render(){
-    const h=cleanHistory(), counts={};
-    h.forEach(x=>counts[x.premio]=(counts[x.premio]||0)+1);
+  function render(h){
+    h=(Array.isArray(h)?h:[]).filter(x=>x&&x.premio&&!BAD.test(String(x.premio).trim()));
+    const counts={}; h.forEach(x=>counts[x.premio]=(counts[x.premio]||0)+1);
     const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
-
-    document.getElementById("mTotal").textContent=h.length;
-    document.getElementById("mLast").textContent=h[0]?.premio||"—";
-    document.getElementById("mTop").textContent=top[0]?.[0]||"—";
-    document.getElementById("mUnique").textContent=Object.keys(counts).length;
-
-    const list=document.getElementById("historyList");
-    list.innerHTML=h.length
-      ? h.map(x=>{
-      const quien = x.participante?.nombre && x.participante?.apellido
-        ? '<br><b>👤 '+esc(x.participante.nombre+' '+x.participante.apellido)+'</b>'
-        : '';
-      return '<div class="history-item"><span>🏆 '+esc(x.premio)+quien+'</span><small>'+esc(x.fecha)+'</small></div>';
-    }).join("")
-      : '<div class="history-item"><span>Aún no hay giros registrados.</span></div>';
+    const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+    set("mTotal",h.length); set("mLast",h[0]?.premio||"—"); set("mTop",top[0]?.[0]||"—"); set("mUnique",Object.keys(counts).length);
+    const list=document.getElementById("historyList"); if(!list)return;
+    list.innerHTML=h.length?h.map(x=>{const quien=x.participante?.nombre&&x.participante?.apellido?'<br><b>👤 '+esc(x.participante.nombre+' '+x.participante.apellido)+'</b>':'';return '<div class="history-item"><span>🏆 '+esc(x.premio)+quien+'</span><small>'+esc(x.fecha||new Date(x.created_at||Date.now()).toLocaleString("es-GT"))+'</small></div>';}).join(""):'<div class="history-item"><span>Aún no hay giros registrados.</span></div>';
   }
 
-  // IMPORTANTE: ya no intenta leer #resultado a los 4.5 segundos.
-  // Espera el evento que la ruleta emite cuando terminó realmente.
-  window.addEventListener("marynel:resultado",function(e){
-    const premio=String(e.detail?.premio||"").trim();
-    if(!premio || BAD.test(premio)) return;
-
-    const h=cleanHistory();
-    const entry={premio,fecha:new Date().toLocaleString("es-GT"),ts:Date.now(),participante:e.detail?.participante||null};
-    h.unshift(entry);
-    localStorage.setItem(KEY,JSON.stringify(h.slice(0,50)));
-    render();
-
-    const win=document.getElementById("winCelebration");
-    const winPrize=document.getElementById("winPrize");
-    if(win && winPrize){
-      winPrize.textContent=premio;
-      win.classList.add("show");
-      win.setAttribute("aria-hidden","false");
+  async function load(){
+    if(window.marynelCentralConfigured && window.marynelCentralConfigured()){
+      const r=await window.marynelCentralHistory();
+      if(!r.error){render(r.data||[]);return;}
+      console.warn("MARYNEL base central:",r.error);
     }
+    render(localClean());
+  }
+
+  window.addEventListener("marynel:resultado",async function(e){
+    const premio=String(e.detail?.premio||"").trim(); if(!premio||BAD.test(premio))return;
+    const detail={premio,participante:e.detail?.participante||null};
+    if(window.marynelCentralConfigured && window.marynelCentralConfigured()){
+      const r=await window.marynelCentralRecordSpin(detail);
+      if(r.error){console.error("No se pudo registrar el giro centralmente:",r.error);}
+      else {load();}
+    } else {
+      const h=localClean(); h.unshift({premio,fecha:new Date().toLocaleString("es-GT"),ts:Date.now(),participante:detail.participante});
+      try{localStorage.setItem(KEY,JSON.stringify(h.slice(0,50)));}catch(e){} render(h);
+    }
+
+    const win=document.getElementById("winCelebration"), winPrize=document.getElementById("winPrize");
+    if(win&&winPrize){winPrize.textContent=premio;win.classList.add("show");win.setAttribute("aria-hidden","false");}
   });
 
-  document.getElementById("closeWin")?.addEventListener("click",function(){
-    const win=document.getElementById("winCelebration");
-    win?.classList.remove("show");
-    win?.setAttribute("aria-hidden","true");
-  });
-
-  render();
+  document.getElementById("closeWin")?.addEventListener("click",function(){const win=document.getElementById("winCelebration");win?.classList.remove("show");win?.setAttribute("aria-hidden","true");});
+  load();
 })();
 </script>
 
 
 <script id="reset-counters-admin">
 (() => {
-  const btn = document.getElementById("resetCounters");
-  const status = document.getElementById("resetCountersStatus");
-  if (!btn) return;
-
-  btn.addEventListener("click", () => {
-    const ok = confirm(
-      "¿Reiniciar todos los contadores a 0?\n\n" +
-      "Esto borrará el historial y permitirá comenzar una nueva ronda.\n" +
-      "La configuración de premios y probabilidades NO se modificará."
-    );
-    if (!ok) return;
-
-    const keys = [
-      "marynel_ruleta_historial_v1",
-      "marynel_ruleta_giro_realizado_v1",
-      "marynel_ruleta_facebook_click_v1",
-      "marynel_ruleta_participante_v1"
-    ];
-
-    keys.forEach(k => {
-      try { localStorage.removeItem(k); } catch(e) {}
-    });
-
-    if (status) status.textContent = "✓ Contadores reiniciados a 0.";
-    setTimeout(() => location.reload(), 700);
+  const btn=document.getElementById("resetCounters"), status=document.getElementById("resetCountersStatus"); if(!btn)return;
+  btn.addEventListener("click",async()=>{
+    const ok=confirm("¿Reiniciar todos los contadores a 0?\n\nEsto borrará el historial CENTRAL de la ruleta y permitirá comenzar una nueva ronda.\nLa configuración de premios y probabilidades NO se modificará."); if(!ok)return;
+    btn.disabled=true;
+    if(window.marynelCentralConfigured && window.marynelCentralConfigured()){
+      const r=await window.marynelCentralReset();
+      if(r.error){alert("No se pudo reiniciar la base central: "+r.error.message);btn.disabled=false;return;}
+    }
+    ["marynel_ruleta_historial_v1","marynel_ruleta_giro_realizado_v1","marynel_ruleta_facebook_click_v1","marynel_ruleta_participante_v1"].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
+    if(status)status.textContent="✓ Contadores reiniciados a 0.";
+    setTimeout(()=>location.reload(),700);
   });
 })();
 </script>
@@ -1900,6 +1895,103 @@ window.addEventListener("resize", ajustarCanvas);
     link.href = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`;
     claim.classList.add("show");
     claim.setAttribute("aria-hidden","false");
+  });
+})();
+</script>
+
+
+<style id="lyra-js-motion-style">
+  .avatar-marco.lyra-motion-ready{will-change:transform;}
+  .avatar-marco.lyra-excited{filter:drop-shadow(0 0 10px rgba(0,234,255,.42)) drop-shadow(0 0 18px rgba(168,85,247,.20));}
+  @media (prefers-reduced-motion: reduce){
+    .avatar-marco.lyra-motion-ready{transform:none !important;}
+  }
+</style>
+
+<script id="lyra-js-motion">
+(function(){
+  const marco = document.querySelector('.avatar-marco');
+  const avatar = document.querySelector('.avatar-marco img.avatar');
+  const spinBtn = document.getElementById('girar');
+  if(!marco || !avatar) return;
+
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce) return;
+
+  marco.classList.add('lyra-motion-ready');
+
+  let raf = 0;
+  let started = performance.now();
+  let reactionUntil = 0;
+  let waveUntil = 0;
+  let lastWave = 0;
+
+  // Movimiento continuo muy sutil: respiración + balanceo natural.
+  function animate(now){
+    const t = (now - started) / 1000;
+    const reaction = now < reactionUntil;
+    const wave = now < waveUntil;
+
+    const breathe = Math.sin(t * 1.7) * 1.8;
+    const sway = Math.sin(t * 0.85 + 0.7) * 0.9;
+    const micro = Math.sin(t * 3.2) * 0.25;
+
+    let y = breathe;
+    let x = sway;
+    let rot = micro + Math.sin(t * 0.72) * 0.45;
+    let scale = 1 + Math.sin(t * 1.7) * 0.004;
+
+    if(reaction){
+      const p = Math.min(1, Math.max(0, (reactionUntil - now) / 1500));
+      const pulse = Math.sin((1 - p) * Math.PI * 5) * 1.6;
+      y -= Math.abs(Math.sin((1-p)*Math.PI*2)) * 3;
+      rot += pulse;
+      scale += Math.sin((1-p)*Math.PI*3) * 0.012;
+    }
+
+    if(wave){
+      // Pequeña inclinación juguetona para acompañar el resultado.
+      const q = (now - lastWave) / 900;
+      rot += Math.sin(q * Math.PI * 4) * 2.2;
+      x += Math.sin(q * Math.PI * 2) * 3;
+    }
+
+    marco.style.transform = `translateX(8px) translate3d(${x.toFixed(2)}px,${y.toFixed(2)}px,0) rotate(${rot.toFixed(2)}deg) scale(${scale.toFixed(4)})`;
+    raf = requestAnimationFrame(animate);
+  }
+
+  raf = requestAnimationFrame(animate);
+
+  // Reacción al iniciar la ruleta.
+  spinBtn?.addEventListener('click', function(){
+    reactionUntil = performance.now() + 1500;
+    marco.classList.add('lyra-excited');
+    setTimeout(() => marco.classList.remove('lyra-excited'), 1700);
+  });
+
+  // Reacción ocasional, para que no quede completamente estática.
+  function randomGesture(){
+    if(document.hidden){
+      setTimeout(randomGesture, 5000);
+      return;
+    }
+    const now = performance.now();
+    if(now > reactionUntil && now > waveUntil){
+      waveUntil = now + 900;
+      lastWave = now;
+    }
+    setTimeout(randomGesture, 9000 + Math.random() * 7000);
+  }
+  setTimeout(randomGesture, 5000);
+
+  // Limpieza si la página cambia de visibilidad.
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden){
+      cancelAnimationFrame(raf);
+    }else{
+      started = performance.now();
+      raf = requestAnimationFrame(animate);
+    }
   });
 })();
 </script>
