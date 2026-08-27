@@ -1,170 +1,131 @@
 /* ============================================================
-   LYRA X7 — ANIMADOR 2D PARA MARYNEL
-   Archivo independiente: lyra-animation.js
+   LYRA X7 — PUPPET 2D REALISTA
+   Archivo externo: lyra-animation.js
 
-   Uso:
-   1. Guarda este archivo junto a index.html.
-   2. Antes de </body> agrega:
-      <script src="lyra-animation.js"></script>
-   3. El script busca automáticamente .avatar o #lyraAvatar.
+   Capas:
+     fondo/cuerpo + torso + cabeza
+   Estados:
+     reposo, respiración, parpadeo, habla, reacción al giro
+
+   IMPORTANTE:
+   Este JS NO crea ni duplica la imagen del avatar.
    ============================================================ */
-
 (() => {
   "use strict";
 
-  const CONFIG = {
-    selector: "#lyraAvatar, .avatar",
-    breathing: true,
-    blinking: true,
-    idleMovement: true,
-    reactionToSpin: true
-  };
-
-  let avatar = null;
-  let idleFrame = null;
-  let blinkTimer = null;
-  let initialized = false;
-
-  function findAvatar() {
-    return document.querySelector(CONFIG.selector);
-  }
-
-  function injectStyles() {
-    if (document.getElementById("lyra-animation-styles")) return;
-
-    const style = document.createElement("style");
-    style.id = "lyra-animation-styles";
-    style.textContent = `
-      .lyra-animated {
-        transform-origin: 50% 78%;
-        will-change: transform, filter;
-      }
-
-      @keyframes lyraBreathing {
-        0%, 100% { transform: translate3d(0,0,0) scale(1); }
-        50%      { transform: translate3d(0,-4px,0) scale(1.006); }
-      }
-
-      @keyframes lyraBlink {
-        0%, 92%, 100% { filter: brightness(1); }
-        94% { filter: brightness(.94); }
-      }
-
-      @keyframes lyraSpinReaction {
-        0%   { transform: translate3d(0,0,0) rotate(0deg) scale(1); }
-        18%  { transform: translate3d(-7px,-3px,0) rotate(-1.2deg) scale(1.01); }
-        36%  { transform: translate3d(7px,-5px,0) rotate(1.2deg) scale(1.015); }
-        55%  { transform: translate3d(-4px,-2px,0) rotate(-.7deg) scale(1.008); }
-        75%  { transform: translate3d(3px,-1px,0) rotate(.5deg) scale(1.004); }
-        100% { transform: translate3d(0,0,0) rotate(0deg) scale(1); }
-      }
-
-      .lyra-spin-reaction {
-        animation: lyraSpinReaction 1.25s ease-in-out;
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .lyra-animated {
-          animation: none !important;
-        }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  function startBreathing() {
-    if (!CONFIG.breathing) return;
-    avatar.style.animation =
-      "lyraBreathing 3.8s ease-in-out infinite";
-  }
-
-  function blink() {
-    if (!avatar || !CONFIG.blinking) return;
-
-    avatar.animate(
-      [
-        { filter: "brightness(1)" },
-        { filter: "brightness(.88)" },
-        { filter: "brightness(1)" }
-      ],
-      {
-        duration: 150,
-        easing: "ease-in-out"
-      }
-    );
-
-    scheduleBlink();
-  }
-
-  function scheduleBlink() {
-    clearTimeout(blinkTimer);
-    blinkTimer = setTimeout(blink, 2200 + Math.random() * 4800);
-  }
-
-  function reactToSpin() {
-    if (!avatar || !CONFIG.reactionToSpin) return;
-
-    avatar.classList.remove("lyra-spin-reaction");
-
-    // Fuerza al navegador a reconocer nuevamente la animación.
-    void avatar.offsetWidth;
-
-    avatar.classList.add("lyra-spin-reaction");
-
-    setTimeout(() => {
-      avatar.classList.remove("lyra-spin-reaction");
-      startBreathing();
-    }, 1300);
-  }
-
-  function connectSpinButton() {
-    const button =
-      document.querySelector("#girar") ||
-      document.querySelector("#spin") ||
-      document.querySelector("[data-spin]");
-
-    if (!button) return;
-
-    button.addEventListener("click", reactToSpin);
-  }
+  const $ = id => document.getElementById(id);
 
   function init() {
-    if (initialized) return;
+    const puppet = $("lyraPuppet");
+    const head = $("lyraHeadLayer");
+    const torso = $("lyraTorsoLayer");
+    const spin = $("girar");
 
-    avatar = findAvatar();
-
-    if (!avatar) {
-      console.warn(
-        "LYRA X7: no encontré el elemento .avatar ni #lyraAvatar."
-      );
+    if (!puppet || !head || !torso) {
+      console.error("LYRA Puppet: faltan capas del avatar.");
       return;
     }
 
-    initialized = true;
-    injectStyles();
+    if (puppet.dataset.lyraPuppetReady === "1") return;
+    puppet.dataset.lyraPuppetReady = "1";
 
-    avatar.classList.add("lyra-animated");
+    const NORMAL = "lyra-head.png";
+    const BLINK = "lyra-head-blink.png";
+    const TALK = "lyra-head-talk.png";
 
-    startBreathing();
+    let start = performance.now();
+    let reactionUntil = 0;
+    let talkingUntil = 0;
+    let nextTalk = 0;
+    let nextBlink = performance.now() + 2500 + Math.random() * 3500;
+    let blinkUntil = 0;
 
-    if (CONFIG.blinking) {
-      scheduleBlink();
+    function scheduleTalk(now) {
+      nextTalk = now + 5000 + Math.random() * 9000;
+    }
+    scheduleTalk(start);
+
+    function setHead(src) {
+      if (!head.src.endsWith(src)) head.src = src;
     }
 
-    connectSpinButton();
+    function animate(now) {
+      const t = (now - start) / 1000;
 
-    console.log("LYRA X7: animación JavaScript activa.");
+      // Respiración del torso: pecho/hombros, no escala de toda LYRA.
+      const breath = Math.sin(t * 1.65) * 1.25;
+      const torsoRot = Math.sin(t * 0.82 + .7) * 0.18;
+      torso.style.transform =
+        `translate3d(${Math.sin(t*.55)*0.45}px,${breath.toFixed(2)}px,0) ` +
+        `rotate(${torsoRot.toFixed(2)}deg)`;
+
+      // Micro movimientos de cabeza independientes.
+      let hx = Math.sin(t * .92) * 1.35;
+      let hy = Math.sin(t * 1.78 + .8) * .9;
+      let hr = Math.sin(t * .66 + .3) * .42;
+
+      // Reacción al giro: giro de cabeza + inclinación, no zoom.
+      if (now < reactionUntil) {
+        const p = Math.max(0, (reactionUntil - now) / 1400);
+        const wave = Math.sin((1 - p) * Math.PI * 5.2);
+        hx += wave * 4.0 * p;
+        hy -= Math.abs(wave) * 1.4 * p;
+        hr += wave * 1.25 * p;
+      }
+
+      head.style.transform =
+        `translate3d(${hx.toFixed(2)}px,${hy.toFixed(2)}px,0) ` +
+        `rotate(${hr.toFixed(2)}deg)`;
+
+      // Parpadeo breve con un frame facial real, no un efecto de zoom.
+      if (now >= nextBlink && blinkUntil === 0) {
+        blinkUntil = now + 125;
+        nextBlink = now + 3000 + Math.random() * 5000;
+      }
+      if (blinkUntil > 0) {
+        if (now < blinkUntil) {
+          setHead(BLINK);
+        } else {
+          blinkUntil = 0;
+          setHead(NORMAL);
+        }
+      }
+
+      // Habla: cambia a un frame con boca abierta durante breves intervalos.
+      if (now >= nextTalk && talkingUntil === 0) {
+        talkingUntil = now + 900;
+        nextTalk = now + 6500 + Math.random() * 10000;
+      }
+      if (talkingUntil > now && blinkUntil === 0) {
+        setHead(TALK);
+      } else if (talkingUntil <= now && blinkUntil === 0) {
+        setHead(NORMAL);
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    requestAnimationFrame(animate);
+
+    function react() {
+      reactionUntil = performance.now() + 1400;
+    }
+
+    if (spin) spin.addEventListener("click", react, {passive:true});
+
+    // API para la ruleta u otros módulos.
+    window.LYRA = window.LYRA || {};
+    window.LYRA.react = react;
+    window.LYRA.talk = () => {
+      talkingUntil = performance.now() + 1200;
+    };
+
+    console.log("LYRA X7 Puppet 2D: capas y animación activas.");
   }
 
-  // Intenta inmediatamente.
-  init();
-
-  // También intenta cuando el DOM ya esté listo.
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init, { once: true });
+    document.addEventListener("DOMContentLoaded", init, {once:true});
+  } else {
+    init();
   }
-
-  // API pública: permite activar la reacción desde el propio index.html.
-  window.LYRA = window.LYRA || {};
-  window.LYRA.react = reactToSpin;
 })();
