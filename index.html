@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta name="marynel-build" content="B1-FIREBASE-FINAL-2026-08-29-01">
-<meta name="marynel-build" content="B1-registro-firebase-corregido-2026-08-29">
+<meta name="marynel-build" content="B1-registro-firebase-continuar-fix-2026-08-29">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#06101f">
@@ -489,12 +489,23 @@ function actualizarParticipanteUI(){
     }
 }
 
+function marynelConTimeout(promise, ms, mensaje){
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(mensaje)), ms))
+    ]);
+}
+
 async function firebaseAuthAnonima(){
     const auth = window.marynelFirebase?.auth;
     if(!auth) return null;
     if(auth.currentUser) return auth.currentUser;
     try{
-        const cred = await auth.signInAnonymously();
+        const cred = await marynelConTimeout(
+            auth.signInAnonymously(),
+            5000,
+            "Tiempo de espera agotado al iniciar autenticación Firebase."
+        );
         if(!cred?.user?.uid) return null;
         return cred.user;
     }catch(e){
@@ -509,7 +520,11 @@ async function firebaseGuardarRegistro(registro, uid){
 
     // Ruta principal: usuario anónimo autenticado.
     if(uid){
-        await db.ref("participants/" + uid).set(registro);
+        await marynelConTimeout(
+            db.ref("participants/" + uid).set(registro),
+            5000,
+            "Tiempo de espera agotado al guardar participante en Firebase."
+        );
         return {ok:true, method:"auth"};
     }
 
@@ -518,7 +533,11 @@ async function firebaseGuardarRegistro(registro, uid){
     // Esto evita que un fallo de Authentication rompa el registro.
     const key = String(registro.client_id || "").replace(/[^a-zA-Z0-9_-]/g, "_");
     if(!key) throw new Error("No existe client_id para guardar el participante.");
-    await db.ref("participants/" + key).set({...registro, firebase_uid:""});
+    await marynelConTimeout(
+        db.ref("participants/" + key).set({...registro, firebase_uid:""}),
+        5000,
+        "Tiempo de espera agotado al guardar participante en Firebase."
+    );
     return {ok:true, method:"direct"};
 }
 
@@ -547,97 +566,82 @@ async function guardarParticipante(){
         return;
     }
 
-    try {
-        const firebaseUser = await firebaseAuthAnonima();
-        const firebaseUid = firebaseUser?.uid || "";
-        const fecha = new Date().toISOString();
+    // IMPORTANTE:
+    // El registro local se confirma primero. Así "Continuar" nunca queda
+    // esperando indefinidamente por Firebase/Internet.
+    const participantId = "MAR-P-" + Date.now() + "-" +
+        Math.random().toString(36).slice(2,8).toUpperCase();
 
-        const registro = {
-            participant_id: "MAR-P-" + Date.now() + "-" + Math.random().toString(36).slice(2,8).toUpperCase(),
-            nombre,
-            apellido,
-            telefono,
-            direccion,
-            client_id: clientId,
-            firebase_uid: firebaseUid,
-            campaign_id: "43d6928f-afe3-4ee7-9ea2-b365d0e4ca76",
-            fecha,
-            createdAt: Date.now()
-        };
-
-        const guardado = await firebaseGuardarRegistro(registro, firebaseUid);
-        registro.firebase_sync = "sincronizado";
-        registro.firebase_method = guardado.method;
+    const registro = {
+        participant_id: participantId,
+        nombre,
+        apellido,
+        telefono,
+        direccion,
+        client_id: clientId,
+        firebase_uid: "",
+        campaign_id: "43d6928f-afe3-4ee7-9ea2-b365d0e4ca76",
+        fecha: new Date().toISOString(),
+        createdAt: Date.now(),
+        firebase_sync: "pendiente"
+    };
 
     participante = {
         nombre,
         apellido,
         telefono,
         direccion,
-        participant_id: registro.participant_id
+        participant_id: participantId
     };
 
     window.marynelParticipant = participante;
     writeStorage(STORAGE_PARTICIPANTE, JSON.stringify(participante));
     guardarParticipanteLocal(registro);
+    writeStorage(
+        "marynel_pending_firebase_participant_v1",
+        JSON.stringify(registro)
+    );
     actualizarParticipanteUI();
 
+    // Cerrar inmediatamente el formulario.
     participantOverlay?.classList.remove("open");
     participantOverlay?.setAttribute("aria-hidden","true");
     if(participantError) participantError.textContent = "";
-    } catch(error) {
-        // FASE B1: si Firebase no acepta la escritura, no bloqueamos al participante.
-        // Se conserva localmente y queda pendiente para reintento.
-        console.error("Firebase rechazó el registro:", error);
+    aplicarBloqueo();
 
-        const fallbackId = "MAR-P-" + Date.now() + "-" +
-            Math.random().toString(36).slice(2,8).toUpperCase();
+    // Firebase se sincroniza en segundo plano. Si falla, el registro local
+    // queda pendiente y el reintento automático existente lo recuperará.
+    (async () => {
+        try {
+            if(!window.marynelFirebase?.db) return;
 
-        const registroFallback = {
-            participant_id: fallbackId,
-            nombre,
-            apellido,
-            telefono,
-            direccion,
-            client_id: clientId,
-            firebase_uid: "",
-            campaign_id: "43d6928f-afe3-4ee7-9ea2-b365d0e4ca76",
-            fecha: new Date().toISOString(),
-            createdAt: Date.now(),
-            firebase_sync: "pendiente"
-        };
+            const firebaseUser = await firebaseAuthAnonima();
+            const uid = firebaseUser?.uid || "";
 
-        participante = {
-            nombre,
-            apellido,
-            telefono,
-            direccion,
-            participant_id: fallbackId
-        };
+            registro.firebase_uid = uid;
+            const guardado = await firebaseGuardarRegistro(registro, uid);
 
-        window.marynelParticipant = participante;
-        writeStorage(STORAGE_PARTICIPANTE, JSON.stringify(participante));
-        guardarParticipanteLocal(registroFallback);
-        writeStorage(
-            "marynel_pending_firebase_participant_v1",
-            JSON.stringify(registroFallback)
-        );
-        actualizarParticipanteUI();
+            registro.firebase_sync = "sincronizado";
+            registro.firebase_method = guardado.method;
 
-        participantOverlay?.classList.remove("open");
-        participantOverlay?.setAttribute("aria-hidden","true");
-        if(participantError) participantError.textContent = "";
+            guardarParticipanteLocal(registro);
+            removeStorage("marynel_pending_firebase_participant_v1");
 
-        // Continúa el flujo normal: Facebook sigue siendo obligatorio.
-        aplicarBloqueo();
-
-        const code = error?.code ? String(error.code) : "";
-        const msg = error?.message ? String(error.message) : "Error desconocido";
-        console.warn("MARYNEL Firebase pendiente:", code, msg);
-        // El participante ya quedó registrado localmente; no mostramos un error
-        // de conexión que bloquee el flujo de la ruleta.
-        if (participantError) participantError.textContent = "";
-    }
+            console.log("MARYNEL: participante sincronizado en Firebase.", guardado.method);
+        } catch(error) {
+            registro.firebase_sync = "pendiente";
+            guardarParticipanteLocal(registro);
+            writeStorage(
+                "marynel_pending_firebase_participant_v1",
+                JSON.stringify(registro)
+            );
+            console.warn(
+                "MARYNEL Firebase pendiente:",
+                error?.code || "",
+                error?.message || error
+            );
+        }
+    })();
 }
 
 
@@ -669,9 +673,21 @@ setTimeout(() => {
     if (window.marynelFirebase?.db) sincronizarParticipantePendiente();
 }, 4500);
 
-participantContinue?.addEventListener("click", guardarParticipante);
+participantContinue?.addEventListener("click", () => {
+    if (participantContinue.disabled) return;
+    participantContinue.disabled = true;
+    const originalText = participantContinue.textContent;
+    participantContinue.textContent = "✓ Registrando...";
+    Promise.resolve(guardarParticipante()).finally(() => {
+        participantContinue.disabled = false;
+        participantContinue.textContent = originalText;
+    });
+});
 [participantName, participantSurname, participantPhone, participantAddress].forEach(input => input?.addEventListener("keydown", e => {
-    if(e.key === "Enter") guardarParticipante();
+    if(e.key === "Enter") {
+        e.preventDefault();
+        participantContinue?.click();
+    }
 }));
 
 
