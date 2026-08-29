@@ -118,6 +118,22 @@ button{cursor:pointer}
 }
 </style>
 
+
+<!-- MARYNEL FIREBASE DIAGNOSTIC -->
+<script>
+(() => {
+  window.marynelFirebaseDiagnostic = () => {
+    const mf = window.marynelFirebase || {};
+    return {
+      firebaseLoaded: typeof firebase !== "undefined",
+      authAvailable: !!mf.auth,
+      databaseAvailable: !!mf.db,
+      currentUser: mf.auth?.currentUser?.uid || null
+    };
+  };
+})();
+</script>
+
 </head>
 \n<!-- MARYNEL LYRA X7 EMBEBIDA: background + torso + head + blink + talk en Base64. Sin archivos externos de imagen. -->\n<body>
 <div class="app">
@@ -535,7 +551,15 @@ async function guardarParticipante(){
     if(participantError) participantError.textContent = "";
     } catch(error) {
         console.error("No se pudo registrar el participante en Firebase:", error);
-        if(participantError) participantError.textContent = "No se pudo guardar el registro. Revisa tu conexión e inténtalo nuevamente.";
+        if(participantError) {
+            const code = error?.code ? String(error.code) : "";
+            const msg = error?.message ? String(error.message) : "Error desconocido";
+            let ayuda = "Revisa la configuración de Firebase.";
+            if(code.includes("operation-not-allowed")) ayuda = "Activa Authentication → Sign-in method → Anonymous en Firebase.";
+            else if(code.includes("permission-denied") || code.includes("PERMISSION_DENIED")) ayuda = "Revisa las reglas de Realtime Database para permitir la escritura del participante.";
+            else if(code.includes("network")) ayuda = "Comprueba tu conexión a Internet.";
+            participantError.textContent = `❌ ${msg} (${code || "sin código"}). ${ayuda}`;
+        }
     }
 }
 
