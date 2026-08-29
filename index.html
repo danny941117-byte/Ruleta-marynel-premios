@@ -1265,6 +1265,28 @@ canvas#ruleta{
 </div>
 
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script>
+(() => {
+  const firebaseConfig = {
+    apiKey: "AIzaSyDDaet5RVkngXDrLX9hxvamtvRna9jGkiU",
+    authDomain: "project-793664988756565670.firebaseapp.com",
+    databaseURL: "https://project-793664988756565670.firebaseio.com",
+    projectId: "project-793664988756565670",
+    storageBucket: "project-793664988756565670.firebasestorage.app",
+    messagingSenderId: "173566254901",
+    appId: "1:173566254901:web:4576a6e6e4ba0058e0767c"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  window.marynelFirebase = {
+    auth: firebase.auth(),
+    db: firebase.database()
+  };
+})();
+</script>
+
 <script>
 (() => {
 "use strict";
@@ -1500,7 +1522,7 @@ function enviarRegistroAGoogleSheets(registro){
     });
 }
 
-function guardarParticipante(){
+async function guardarParticipante(){
     const nombre = String(participantName?.value || "").trim().replace(/\s+/g," ");
     const apellido = String(participantSurname?.value || "").trim().replace(/\s+/g," ");
     const telefonoRaw = String(participantPhone?.value || "").trim();
@@ -1518,15 +1540,30 @@ function guardarParticipante(){
         return;
     }
 
-    const registro = {
-        participant_id: "MAR-P-" + Date.now() + "-" + Math.random().toString(36).slice(2,8).toUpperCase(),
-        nombre,
-        apellido,
-        telefono,
-        client_id: clientId,
-        campaign_id: "43d6928f-afe3-4ee7-9ea2-b365d0e4ca76",
-        fecha: new Date().toISOString()
-    };
+    try {
+        const auth = window.marynelFirebase?.auth;
+        const db = window.marynelFirebase?.db;
+        if(!auth || !db) throw new Error("Firebase no está disponible.");
+
+        const credencial = auth.currentUser
+            ? { user: auth.currentUser }
+            : await auth.signInAnonymously();
+        const firebaseUid = credencial.user.uid;
+        const fecha = new Date().toISOString();
+
+        const registro = {
+            participant_id: "MAR-P-" + Date.now() + "-" + Math.random().toString(36).slice(2,8).toUpperCase(),
+            nombre,
+            apellido,
+            telefono,
+            client_id: clientId,
+            firebase_uid: firebaseUid,
+            campaign_id: "43d6928f-afe3-4ee7-9ea2-b365d0e4ca76",
+            fecha,
+            createdAt: Date.now()
+        };
+
+        await db.ref("participants/" + firebaseUid).set(registro);
 
     participante = {
         nombre,
@@ -1544,6 +1581,10 @@ function guardarParticipante(){
     participantOverlay?.classList.remove("open");
     participantOverlay?.setAttribute("aria-hidden","true");
     if(participantError) participantError.textContent = "";
+    } catch(error) {
+        console.error("No se pudo registrar el participante en Firebase:", error);
+        if(participantError) participantError.textContent = "No se pudo guardar el registro. Revisa tu conexión e inténtalo nuevamente.";
+    }
 }
 
 participantContinue?.addEventListener("click", guardarParticipante);
