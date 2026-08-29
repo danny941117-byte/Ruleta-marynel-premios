@@ -1071,8 +1071,13 @@ canvas#ruleta{
       <h2 id="adminTitle">⚙️ Panel de administración</h2>
       <button class="admin-close" id="adminClose" type="button">✕</button>
     </div>
-    <p class="admin-help">Cambia los premios y su peso de probabilidad. La rueda mantiene segmentos visualmente iguales; el peso se usa para seleccionar el resultado. El giro realizado queda bloqueado aunque se actualice la página. "Restablecer" es la acción administrativa para habilitarlo de nuevo.</p><div id="centralDbStatus" style="margin:8px 0;color:#8feaff;font-size:.78rem">🌐 Base central: configuración pendiente</div>
+    <p class="admin-help">Cambia los premios y su peso de probabilidad. La rueda mantiene segmentos visualmente iguales; el peso se usa para seleccionar el resultado. El giro realizado queda bloqueado aunque se actualice la página. "Restablecer" es la acción administrativa para habilitarlo de nuevo.</p>
     <div class="admin-list" id="adminList"></div>
+<div style="margin:14px 0;padding:14px;border:1px solid rgba(0,234,255,.18);border-radius:14px;background:rgba(0,20,35,.35);">
+      <div style="color:#fff;font-weight:800;margin-bottom:6px;">👥 Participantes registrados</div>
+      <div id="participantLocalCount" style="color:#8faabd;font-size:.82rem;margin-bottom:10px;">Registros guardados en este dispositivo: 0</div><div style="color:#8feaff;font-size:.78rem;margin-bottom:10px;">☁️ Google Sheets: conectado</div>
+      <button class="admin-secondary" id="exportParticipants" type="button">⬇️ Exportar participantes (JSON)</button>
+    </div>
     <div class="admin-actions">
       <button class="admin-secondary" id="addPrize" type="button">＋ Agregar premio</button>
       
@@ -1222,6 +1227,8 @@ if (!ctx) {
 const STORAGE_CONFIG = "marynel_ruleta_config";
 const STORAGE_GIRO = "marynel_ruleta_giro_realizado_v1";
 const STORAGE_PARTICIPANTE = "marynel_ruleta_participante_v1";
+const STORAGE_PARTICIPANTES = "marynel_ruleta_participantes_v1";
+const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycbwkgD8EPjDZq7drQ_Oc0FWfiwR3sRWciv87fOBY2wFUdx-NDXbSDsm5mTcia0Cnpz8q/exec";
 const STORAGE_FACEBOOK_CLICK = "marynel_ruleta_facebook_click_v1";
 
 const DEFAULT_PREMIOS = [
@@ -1299,12 +1306,52 @@ const participantContinue = document.getElementById("participantContinue");
 const participantError = document.getElementById("participantError");
 const participantBadge = document.getElementById("participantBadge");
 
+function leerParticipantesLocal(){
+    try{
+        const raw = readStorage(STORAGE_PARTICIPANTES);
+        const data = raw ? JSON.parse(raw) : [];
+        return Array.isArray(data) ? data : [];
+    }catch(e){ return []; }
+}
+
+function guardarParticipanteLocal(registro){
+    const lista = leerParticipantesLocal();
+    const indice = lista.findIndex(x => x && x.client_id === registro.client_id);
+    if(indice >= 0) lista[indice] = {...lista[indice], ...registro};
+    else lista.unshift(registro);
+    writeStorage(STORAGE_PARTICIPANTES, JSON.stringify(lista.slice(0, 500)));
+}
+
+function exportarParticipantesLocal(){
+    const lista = leerParticipantesLocal();
+    const contenido = JSON.stringify({
+        exportado: new Date().toISOString(),
+        total: lista.length,
+        participantes: lista
+    }, null, 2);
+    const blob = new Blob([contenido], {type:"application/json;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "participantes_marynel.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+window.marynelExportarParticipantes = exportarParticipantesLocal;
+
 function cargarParticipante(){
     try{
         const raw = readStorage(STORAGE_PARTICIPANTE);
         const data = raw ? JSON.parse(raw) : null;
         if(data && data.nombre && data.apellido && data.telefono){
-            return {nombre:String(data.nombre), apellido:String(data.apellido), telefono:String(data.telefono)};
+            return {
+                nombre:String(data.nombre),
+                apellido:String(data.apellido),
+                telefono:String(data.telefono),
+                participant_id:data.participant_id ? String(data.participant_id) : null
+            };
         }
     }catch(e){}
     return null;
@@ -1367,6 +1414,32 @@ function actualizarParticipanteUI(){
     }
 }
 
+
+function enviarRegistroAGoogleSheets(registro){
+    // Se usa text/plain para mantener la petición simple y evitar
+    // una pre-solicitud CORS desde GitHub Pages.
+    const cuerpo = JSON.stringify({
+        id: registro.participant_id,
+        nombre: registro.nombre,
+        apellido: registro.apellido,
+        telefono: registro.telefono,
+        client_id: registro.client_id,
+        campana: "Ruleta MARYNEL",
+        fecha: registro.fecha,
+        premio: registro.premio || ""
+    });
+
+    return fetch(GOOGLE_SHEETS_API, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {"Content-Type":"text/plain;charset=utf-8"},
+        body: cuerpo,
+        keepalive: true
+    }).catch(error => {
+        console.warn("No se pudo enviar el registro a Google Sheets:", error);
+    });
+}
+
 function guardarParticipante(){
     const nombre = String(participantName?.value || "").trim().replace(/\s+/g," ");
     const apellido = String(participantSurname?.value || "").trim().replace(/\s+/g," ");
@@ -1385,9 +1458,27 @@ function guardarParticipante(){
         return;
     }
 
-    participante = {nombre, apellido, telefono};
+    const registro = {
+        participant_id: "MAR-P-" + Date.now() + "-" + Math.random().toString(36).slice(2,8).toUpperCase(),
+        nombre,
+        apellido,
+        telefono,
+        client_id: clientId,
+        campaign_id: "43d6928f-afe3-4ee7-9ea2-b365d0e4ca76",
+        fecha: new Date().toISOString()
+    };
+
+    participante = {
+        nombre,
+        apellido,
+        telefono,
+        participant_id: registro.participant_id
+    };
+
     window.marynelParticipant = participante;
     writeStorage(STORAGE_PARTICIPANTE, JSON.stringify(participante));
+    guardarParticipanteLocal(registro);
+    enviarRegistroAGoogleSheets(registro);
     actualizarParticipanteUI();
 
     participantOverlay?.classList.remove("open");
@@ -1498,8 +1589,15 @@ function escapar(v) {
     }[c]));
 }
 
+function actualizarParticipantesAdmin(){
+    const el = document.getElementById("participantLocalCount");
+    if(el) el.textContent = "Registros guardados en este dispositivo: " + leerParticipantesLocal().length;
+}
+document.getElementById("exportParticipants")?.addEventListener("click", exportarParticipantesLocal);
+
 function renderAdmin() {
     if (!adminList) return;
+    actualizarParticipantesAdmin();
     adminList.innerHTML = "";
     config.premios.forEach((p, i) => {
         const row = document.createElement("div");
