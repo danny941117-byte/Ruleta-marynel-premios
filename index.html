@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta name="marynel-build" content="B1-FIREBASE-FINAL-2026-08-29-01">
-<meta name="marynel-build" content="B1-registro-firebase-continuar-fix-2026-08-29">
+<meta name="marynel-build" content="B1-registro-firebase-continuar-fix-2026-08-29-02">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#06101f">
@@ -39,7 +39,7 @@ button{cursor:pointer}
 .admin-panel{width:min(700px,94vw);max-height:90vh;overflow:auto;background:linear-gradient(145deg,#0a1b30,#030914);border:1px solid rgba(0,234,255,.45);border-radius:18px;padding:18px}.admin-header{display:flex;justify-content:space-between;align-items:center;gap:10px}.admin-header h2{margin:0;font-size:1.05rem}.admin-list{display:grid;gap:7px;margin:12px 0;max-height:42vh;overflow:auto}.admin-row{display:grid;grid-template-columns:1fr 90px 38px;gap:6px}.admin-row input{min-width:0;padding:8px;border-radius:8px;border:1px solid rgba(0,234,255,.18);background:#020a15;color:#fff}.admin-remove{border:1px solid rgba(255,100,120,.3);background:rgba(255,50,70,.08);color:#ffb0b8;border-radius:8px}.admin-actions{display:flex;flex-wrap:wrap;gap:7px}.admin-actions button{padding:9px 11px;border-radius:9px;border:1px solid rgba(0,234,255,.25);background:rgba(255,255,255,.05);color:#dffaff}.admin-actions .save{background:#08314a;border-color:var(--cyan)}.admin-status{color:#8fddec;font-size:.72rem;margin-top:8px}.admin-note{font-size:.7rem;color:#82a8b7;margin:8px 0}
 .win-celebration{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.65);z-index:9999}.win-celebration.show{display:grid}.win-box{width:min(480px,88%);padding:28px;border:2px solid #ffe600;border-radius:22px;background:linear-gradient(145deg,#07162d,#020812);text-align:center;box-shadow:0 0 40px rgba(255,230,0,.25)}.win-box .win-label{color:#ffe600;letter-spacing:3px;font-weight:800}.win-box h2{font-size:2rem;margin:10px 0;color:#fff}.win-box p{color:#9fe9f5}.win-box button{padding:10px 20px;border:1px solid #ffe600;border-radius:10px;background:#ffe600;color:#111;font-weight:800}
 #whatsappClaim{display:none;margin:12px auto 0;max-width:520px;padding:12px;border-radius:12px;background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.25);text-align:center}#whatsappClaim.show{display:block}#whatsappClaim a{color:#b8ffd0;font-weight:800;text-decoration:none}
-#marynelTestMode{margin:12px auto 0;width:min(600px,100%);padding:10px;border:1px dashed rgba(255,230,0,.25);border-radius:10px;background:rgba(255,230,0,.025)}#marynelTestMode div{font-size:.7rem;color:#9ebbc5}
+#marynelTestMode{margin:12px 0 0;width:100%;padding:10px;border:1px dashed rgba(255,230,0,.25);border-radius:10px;background:rgba(255,230,0,.025)}#marynelTestMode div{font-size:.7rem;color:#9ebbc5}
 @media(max-width:820px){.layout{grid-template-columns:1fr}.sidebar{order:2}.avatar-marco{display:block}.metrics-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.topbar{padding-top:14px}.main-panel{padding:10px;border-radius:17px}.hero h2{font-size:1.15rem}.roulette-wrap{padding:5px}.spin-button{width:100%}.qr-contactos{grid-template-columns:1fr 1fr}.qr-contactos img{width:125px;height:125px}.admin-row{grid-template-columns:1fr 75px 36px}.admin-panel{padding:12px}.metrics-grid{grid-template-columns:repeat(2,1fr)}.history-item{flex-direction:column;gap:3px}}
 </style>
@@ -149,7 +149,6 @@ button{cursor:pointer}
   <div class="roulette-wrap"><div class="pointer"></div><canvas id="ruleta" width="700" height="700" aria-label="Ruleta de premios"></canvas></div>
   <div class="controls"><button id="girar" class="spin-button" type="button">🎡 GIRAR</button><div id="resultado">💙 Preparando tu participación…</div><div id="participantBadge" hidden></div></div>
   <div id="whatsappClaim" aria-hidden="true">📲 <a id="whatsappClaimLink" target="_blank" rel="noopener noreferrer">Reclamar mi premio por WhatsApp</a></div>
-  <div id="marynelTestMode"><div>Modo de prueba administrativo</div><button id="enableTestSpin" class="secondary" type="button">🧪 Habilitar giro de prueba</button><div id="testSpinStatus"></div></div>
   <div class="avatar-marco lyra-x7-card" aria-label="LYRA X7, avatar MARYNEL">
   <div class="lyra-puppet" id="lyraPuppet" aria-label="LYRA X7 animada">
     <img class="lyra-layer lyra-body-layer" id="lyraBodyLayer"
@@ -230,6 +229,11 @@ button{cursor:pointer}
     <div class="admin-actions">
       <button id="addPrize" type="button">＋ Premio</button><button id="saveConfig" class="save" type="button">💾 Guardar</button><button id="resetConfig" type="button">↺ Restablecer</button>
       <button id="exportParticipants" type="button">📤 Exportar participantes</button><button id="resetCounters" type="button">🗑 Reiniciar contadores</button>
+    </div>
+    <div id="marynelTestMode">
+      <div>🛠️ Herramienta administrativa de prueba</div>
+      <button id="enableTestSpin" class="secondary" type="button">🧪 Habilitar giro de prueba</button>
+      <div id="testSpinStatus"></div>
     </div>
     <div id="participantLocalCount" class="admin-status"></div><div id="adminStatus" class="admin-status"></div>
     <div style="display:none"><input id="spinLimit" value="1"></div>
