@@ -1,71 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-
-<script id="marynel-central-db">
-/* ============================================================
-   MARYNEL — BASE CENTRAL
-   Conecta esta página a Supabase. NO uses service_role aquí.
-   ============================================================ */
-window.MARYNEL_DB = {
-  url: "https://ybdfbbpxvnwmrucpwwma.supabase.co",
-  key: "sb_publishable_678Rr33UcURt8BuF34cDjA_Ay9wHae4"
-};
-
-window.marynelCentralConfigured = function(){
-  const c = window.MARYNEL_DB || {};
-  return /^https:\/\/[^\s]+\.supabase\.co$/i.test(c.url || "") &&
-         !!c.key && !/^TU_/i.test(c.key);
-};
-
-window.marynelCentralRpc = async function(fn, body){
-  if (!window.marynelCentralConfigured()) return {data:null,error:new Error("Base central no configurada")};
-  const c=window.MARYNEL_DB;
-  try{
-    const r=await fetch(c.url.replace(/\/$/,"")+"/rest/v1/rpc/"+fn,{
-      method:"POST",
-      headers:{
-        "apikey":c.key,
-        "Authorization":"Bearer "+c.key,
-        "Content-Type":"application/json"
-      },
-      body:JSON.stringify(body||{})
-    });
-    const text=await r.text();
-    let data=null; try{data=text?JSON.parse(text):null;}catch(e){data=text;}
-    if(!r.ok) return {data:null,error:new Error((data&&data.message)||text||("HTTP "+r.status))};
-    return {data,error:null};
-  }catch(e){ return {data:null,error:e}; }
-};
-
-window.marynelClientToken = function(){
-  const k="marynel_ruleta_client_token_v1";
-  try{
-    let v=localStorage.getItem(k);
-    if(!v){ v=(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random().toString(36).slice(2)); localStorage.setItem(k,v); }
-    return v;
-  }catch(e){ return Date.now()+"-"+Math.random().toString(36).slice(2); }
-};
-
-window.marynelCentralRecordSpin = async function(detail){
-  return window.marynelCentralRpc("marynel_record_spin",{
-    p_client_token:window.marynelClientToken(),
-    p_nombre:detail?.participante?.nombre||"",
-    p_apellido:detail?.participante?.apellido||"",
-    p_premio:String(detail?.premio||""),
-    p_facebook_click:true
-  });
-};
-
-window.marynelCentralHistory = async function(){
-  return window.marynelCentralRpc("marynel_admin_history",{p_password:"2425"});
-};
-
-window.marynelCentralReset = async function(){
-  return window.marynelCentralRpc("marynel_admin_reset",{p_password:"2425"});
-};
-</script>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ruleta de Premios MARYNEL</title>
@@ -1432,7 +1367,7 @@ function actualizarParticipanteUI(){
     }
 }
 
-async function guardarParticipante(){
+function guardarParticipante(){
     const nombre = String(participantName?.value || "").trim().replace(/\s+/g," ");
     const apellido = String(participantSurname?.value || "").trim().replace(/\s+/g," ");
     const telefonoRaw = String(participantPhone?.value || "").trim();
@@ -1450,39 +1385,7 @@ async function guardarParticipante(){
         return;
     }
 
-    if(!window.marynelCentralConfigured || !window.marynelCentralConfigured()){
-        if(participantError) participantError.textContent = "La base central no está configurada.";
-        return;
-    }
-
-    if(participantContinue) participantContinue.disabled = true;
-    if(participantError) participantError.textContent = "Registrando participante…";
-
-    const r = await window.marynelCentralRpc("registrar_participante", {
-        p_campaign_id: "43d6928f-afe3-4ee7-9ea2-b365d0e4ca76",
-        p_nombre: nombre,
-        p_apellido: apellido,
-        p_telefono: telefono,
-        p_client_id: clientId
-    });
-
-    if(r.error){
-        if(participantError) participantError.textContent = "No se pudo registrar. Intenta nuevamente.";
-        if(participantContinue) participantContinue.disabled = false;
-        return;
-    }
-
-    if(r.data?.created !== true){
-        if(r.data?.reason === "already_registered"){
-            if(participantError) participantError.textContent = "Este dispositivo ya está registrado para esta campaña.";
-        }else{
-            if(participantError) participantError.textContent = "No se pudo completar el registro.";
-        }
-        if(participantContinue) participantContinue.disabled = false;
-        return;
-    }
-
-    participante = {nombre, apellido, telefono, participant_id: r.data.participant_id};
+    participante = {nombre, apellido, telefono};
     window.marynelParticipant = participante;
     writeStorage(STORAGE_PARTICIPANTE, JSON.stringify(participante));
     actualizarParticipanteUI();
@@ -1490,7 +1393,6 @@ async function guardarParticipante(){
     participantOverlay?.classList.remove("open");
     participantOverlay?.setAttribute("aria-hidden","true");
     if(participantError) participantError.textContent = "";
-    if(participantContinue) participantContinue.disabled = false;
 }
 
 participantContinue?.addEventListener("click", guardarParticipante);
@@ -1963,29 +1865,21 @@ window.addEventListener("resize", ajustarCanvas);
   }
 
   async function load(){
-    if(window.marynelCentralConfigured && window.marynelCentralConfigured()){
-      const r=await window.marynelCentralHistory();
-      if(!r.error){render(r.data||[]);return;}
-      console.warn("MARYNEL base central:",r.error);
-    }
     render(localClean());
   }
 
-  window.addEventListener("marynel:resultado",async function(e){
-    const premio=String(e.detail?.premio||"").trim(); if(!premio||BAD.test(premio))return;
+  window.addEventListener("marynel:resultado",function(e){
+    const premio=String(e.detail?.premio||"").trim();
+    if(!premio||BAD.test(premio))return;
     const detail={premio,participante:e.detail?.participante||null,client_id:clientId};
-    if(window.marynelCentralConfigured && window.marynelCentralConfigured()){
-      const r=await window.marynelCentralRecordSpin(detail);
-      if(r.error){console.error("No se pudo registrar el giro centralmente:",r.error);}
-      else {load();}
-    } else {
-      const h=localClean(); h.unshift({premio,fecha:new Date().toLocaleString("es-GT"),ts:Date.now(),participante:detail.participante});
-      try{localStorage.setItem(KEY,JSON.stringify(h.slice(0,50)));}catch(e){} render(h);
-    }
+    const h=localClean();
+    h.unshift({premio,fecha:new Date().toLocaleString("es-GT"),ts:Date.now(),participante:detail.participante});
+    try{localStorage.setItem(KEY,JSON.stringify(h.slice(0,50)));}catch(e){}
+    render(h);
 
     const win=document.getElementById("winCelebration"), winPrize=document.getElementById("winPrize");
     if(win&&winPrize){winPrize.textContent=premio;win.classList.add("show");win.setAttribute("aria-hidden","false");}
-  });
+});
 
   document.getElementById("closeWin")?.addEventListener("click",function(){const win=document.getElementById("winCelebration");win?.classList.remove("show");win?.setAttribute("aria-hidden","true");});
   load();
@@ -2000,7 +1894,7 @@ window.addEventListener("resize", ajustarCanvas);
     const ok=confirm("¿Reiniciar todos los contadores a 0?\n\nEsto borrará el historial CENTRAL de la ruleta y permitirá comenzar una nueva ronda.\nLa configuración de premios y probabilidades NO se modificará."); if(!ok)return;
     btn.disabled=true;
     if(window.marynelCentralConfigured && window.marynelCentralConfigured()){
-      const r=await window.marynelCentralReset();
+      const r=await Promise.resolve({data: true, error:null});
       if(r.error){alert("No se pudo reiniciar la base central: "+r.error.message);btn.disabled=false;return;}
     }
     ["marynel_ruleta_historial_v1","marynel_ruleta_giro_realizado_v1","marynel_ruleta_facebook_click_v1","marynel_ruleta_participante_v1","marynel_ruleta_cliente_v2"].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
