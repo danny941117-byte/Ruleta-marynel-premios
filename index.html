@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<meta name="marynel-build" content="B1-FIREBASE-FINAL-2026-08-29-01">
 <meta name="marynel-build" content="B1-registro-firebase-corregido-2026-08-29">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -490,18 +491,35 @@ function actualizarParticipanteUI(){
 
 async function firebaseAuthAnonima(){
     const auth = window.marynelFirebase?.auth;
-    if(!auth) throw new Error("Firebase Auth no está disponible.");
+    if(!auth) return null;
     if(auth.currentUser) return auth.currentUser;
-    const cred = await auth.signInAnonymously();
-    if(!cred?.user?.uid) throw new Error("Firebase no devolvió un UID anónimo.");
-    return cred.user;
+    try{
+        const cred = await auth.signInAnonymously();
+        if(!cred?.user?.uid) return null;
+        return cred.user;
+    }catch(e){
+        console.warn("MARYNEL: Auth anónima no disponible; se probará escritura directa en Realtime Database.", e?.code || e?.message || e);
+        return null;
+    }
 }
 
 async function firebaseGuardarRegistro(registro, uid){
     const db = window.marynelFirebase?.db;
     if(!db) throw new Error("Firebase Realtime Database no está disponible.");
-    await db.ref("participants/" + uid).set(registro);
-    return true;
+
+    // Ruta principal: usuario anónimo autenticado.
+    if(uid){
+        await db.ref("participants/" + uid).set(registro);
+        return {ok:true, method:"auth"};
+    }
+
+    // Fallback real de Firebase: si el proyecto permite escritura pública en
+    // Realtime Database, guardamos usando el client_id como clave estable.
+    // Esto evita que un fallo de Authentication rompa el registro.
+    const key = String(registro.client_id || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+    if(!key) throw new Error("No existe client_id para guardar el participante.");
+    await db.ref("participants/" + key).set({...registro, firebase_uid:""});
+    return {ok:true, method:"direct"};
 }
 
 async function guardarParticipante(){
@@ -531,7 +549,7 @@ async function guardarParticipante(){
 
     try {
         const firebaseUser = await firebaseAuthAnonima();
-        const firebaseUid = firebaseUser.uid;
+        const firebaseUid = firebaseUser?.uid || "";
         const fecha = new Date().toISOString();
 
         const registro = {
@@ -547,7 +565,9 @@ async function guardarParticipante(){
             createdAt: Date.now()
         };
 
-        await firebaseGuardarRegistro(registro, firebaseUid);
+        const guardado = await firebaseGuardarRegistro(registro, firebaseUid);
+        registro.firebase_sync = "sincronizado";
+        registro.firebase_method = guardado.method;
 
     participante = {
         nombre,
@@ -566,8 +586,8 @@ async function guardarParticipante(){
     participantOverlay?.setAttribute("aria-hidden","true");
     if(participantError) participantError.textContent = "";
     } catch(error) {
-        // FASE B1: Firebase no debe impedir que el participante continúe.
-        // Guardamos localmente y dejamos el registro marcado para sincronización.
+        // FASE B1: si Firebase no acepta la escritura, no bloqueamos al participante.
+        // Se conserva localmente y queda pendiente para reintento.
         console.error("Firebase rechazó el registro:", error);
 
         const fallbackId = "MAR-P-" + Date.now() + "-" +
@@ -630,11 +650,12 @@ async function sincronizarParticipantePendiente(){
         const pendiente = JSON.parse(raw);
         if(!window.marynelFirebase?.auth || !window.marynelFirebase?.db) return;
         const firebaseUser = await firebaseAuthAnonima();
-        const uid = firebaseUser.uid;
+        const uid = firebaseUser?.uid || "";
         pendiente.firebase_uid = uid;
         pendiente.firebase_sync = "sincronizado";
 
-        await firebaseGuardarRegistro(pendiente, uid);
+        const guardado = await firebaseGuardarRegistro(pendiente, uid);
+        pendiente.firebase_method = guardado.method;
         removeStorage("marynel_pending_firebase_participant_v1");
         console.log("MARYNEL: participante pendiente sincronizado en Firebase.");
     }catch(e){
