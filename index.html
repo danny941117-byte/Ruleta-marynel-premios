@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<meta name="marynel-build" content="B1-registro-firebase-fallback-2026-08-29">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#06101f">
@@ -550,18 +551,87 @@ async function guardarParticipante(){
     participantOverlay?.setAttribute("aria-hidden","true");
     if(participantError) participantError.textContent = "";
     } catch(error) {
-        console.error("No se pudo registrar el participante en Firebase:", error);
-        if(participantError) {
-            const code = error?.code ? String(error.code) : "";
-            const msg = error?.message ? String(error.message) : "Error desconocido";
-            let ayuda = "Revisa la configuración de Firebase.";
-            if(code.includes("operation-not-allowed")) ayuda = "Activa Authentication → Sign-in method → Anonymous en Firebase.";
-            else if(code.includes("permission-denied") || code.includes("PERMISSION_DENIED")) ayuda = "Revisa las reglas de Realtime Database para permitir la escritura del participante.";
-            else if(code.includes("network")) ayuda = "Comprueba tu conexión a Internet.";
-            participantError.textContent = `❌ ${msg} (${code || "sin código"}). ${ayuda}`;
-        }
+        // FASE B1: Firebase no debe impedir que el participante continúe.
+        // Guardamos localmente y dejamos el registro marcado para sincronización.
+        console.error("Firebase rechazó el registro:", error);
+
+        const fallbackId = "MAR-P-" + Date.now() + "-" +
+            Math.random().toString(36).slice(2,8).toUpperCase();
+
+        const registroFallback = {
+            participant_id: fallbackId,
+            nombre,
+            apellido,
+            telefono,
+            direccion,
+            client_id: clientId,
+            firebase_uid: "",
+            campaign_id: "43d6928f-afe3-4ee7-9ea2-b365d0e4ca76",
+            fecha: new Date().toISOString(),
+            createdAt: Date.now(),
+            firebase_sync: "pendiente"
+        };
+
+        participante = {
+            nombre,
+            apellido,
+            telefono,
+            direccion,
+            participant_id: fallbackId
+        };
+
+        window.marynelParticipant = participante;
+        writeStorage(STORAGE_PARTICIPANTE, JSON.stringify(participante));
+        guardarParticipanteLocal(registroFallback);
+        writeStorage(
+            "marynel_pending_firebase_participant_v1",
+            JSON.stringify(registroFallback)
+        );
+        actualizarParticipanteUI();
+
+        participantOverlay?.classList.remove("open");
+        participantOverlay?.setAttribute("aria-hidden","true");
+        if(participantError) participantError.textContent = "";
+
+        // Continúa el flujo normal: Facebook sigue siendo obligatorio.
+        aplicarBloqueo();
+
+        const code = error?.code ? String(error.code) : "";
+        const msg = error?.message ? String(error.message) : "Error desconocido";
+        console.warn("MARYNEL Firebase pendiente:", code, msg);
     }
 }
+
+
+// Reintento automático del último registro pendiente.
+async function sincronizarParticipantePendiente(){
+    try{
+        const raw = readStorage("marynel_pending_firebase_participant_v1");
+        if(!raw) return;
+
+        const pendiente = JSON.parse(raw);
+        const auth = window.marynelFirebase?.auth;
+        const db = window.marynelFirebase?.db;
+        if(!auth || !db) return;
+
+        const credencial = auth.currentUser
+            ? { user: auth.currentUser }
+            : await auth.signInAnonymously();
+
+        const uid = credencial.user.uid;
+        pendiente.firebase_uid = uid;
+        pendiente.firebase_sync = "sincronizado";
+
+        await db.ref("participants/" + uid).set(pendiente);
+        removeStorage("marynel_pending_firebase_participant_v1");
+        console.log("MARYNEL: participante pendiente sincronizado en Firebase.");
+    }catch(e){
+        console.warn("MARYNEL: sincronización pendiente.", e);
+    }
+}
+
+window.addEventListener("online", sincronizarParticipantePendiente);
+setTimeout(sincronizarParticipantePendiente, 1800);
 
 participantContinue?.addEventListener("click", guardarParticipante);
 [participantName, participantSurname, participantPhone, participantAddress].forEach(input => input?.addEventListener("keydown", e => {
