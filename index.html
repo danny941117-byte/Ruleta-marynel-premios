@@ -427,7 +427,9 @@ function leerParticipantesLocal(){
 
 function guardarParticipanteLocal(registro){
     const lista = leerParticipantesLocal();
-    const indice = lista.findIndex(x => x && x.client_id === registro.client_id);
+    // Un registro = un participante. Nunca usamos client_id como llave
+    // porque un mismo navegador puede registrar a muchas personas.
+    const indice = lista.findIndex(x => x && x.participant_id === registro.participant_id);
     if(indice >= 0) lista[indice] = {...lista[indice], ...registro};
     else lista.unshift(registro);
     writeStorage(STORAGE_PARTICIPANTES, JSON.stringify(lista.slice(0, 500)));
@@ -555,27 +557,21 @@ async function firebaseGuardarRegistro(registro, uid){
     const db = window.marynelFirebase?.db;
     if(!db) throw new Error("Firebase Realtime Database no está disponible.");
 
-    // Ruta principal: usuario anónimo autenticado.
-    if(uid){
-        await marynelConTimeout(
-            db.ref("participants/" + uid).set(registro),
-            5000,
-            "Tiempo de espera agotado al guardar participante en Firebase."
-        );
-        return {ok:true, method:"auth"};
-    }
+    // Cada participante tiene su propia llave.
+    // NUNCA usamos firebase_uid ni client_id como llave del registro,
+    // porque varios participantes pueden compartir navegador/sesión.
+    const key = String(registro.participant_id || "")
+        .replace(/[^a-zA-Z0-9_-]/g, "_");
+    if(!key) throw new Error("No existe participant_id para guardar el participante.");
 
-    // Fallback real de Firebase: si el proyecto permite escritura pública en
-    // Realtime Database, guardamos usando el client_id como clave estable.
-    // Esto evita que un fallo de Authentication rompa el registro.
-    const key = String(registro.client_id || "").replace(/[^a-zA-Z0-9_-]/g, "_");
-    if(!key) throw new Error("No existe client_id para guardar el participante.");
+    const datos = {...registro, firebase_uid: String(uid || "")};
     await marynelConTimeout(
-        db.ref("participants/" + key).set({...registro, firebase_uid:""}),
+        db.ref("participants/" + key).set(datos),
         5000,
         "Tiempo de espera agotado al guardar participante en Firebase."
     );
-    return {ok:true, method:"direct"};
+
+    return {ok:true, method: uid ? "auth" : "direct"};
 }
 
 async function guardarParticipante(){
@@ -689,7 +685,7 @@ async function sincronizarParticipantePendiente(){
         if(!raw) return;
 
         const pendiente = JSON.parse(raw);
-        if(!window.marynelFirebase?.auth || !window.marynelFirebase?.db) return;
+        if(!window.marynelFirebase?.db) return;
         const firebaseUser = await firebaseAuthAnonima();
         const uid = firebaseUser?.uid || "";
         pendiente.firebase_uid = uid;
