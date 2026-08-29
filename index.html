@@ -1118,9 +1118,10 @@ canvas#ruleta{
 <div id="participantOverlay" aria-hidden="true">
   <section id="participantBox" role="dialog" aria-modal="true" aria-labelledby="participantTitle">
     <h2 id="participantTitle">👤 Registro de participante</h2>
-    <p>Antes de participar, ingresa tu nombre y apellido para registrar correctamente al ganador.</p>
+    <p>Antes de participar, ingresa tu nombre, apellido y número telefónico para registrar correctamente al ganador y facilitar el reclamo por WhatsApp.</p>
     <input id="participantName" type="text" autocomplete="given-name" maxlength="40" placeholder="Nombre">
     <input id="participantSurname" type="text" autocomplete="family-name" maxlength="60" placeholder="Apellido">
+    <input id="participantPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="Número telefónico">
     <div id="participantError"></div>
     <button id="participantContinue" type="button">CONTINUAR</button>
   </section>
@@ -1358,6 +1359,7 @@ let yaGiro = readStorage(STORAGE_GIRO) === "1";
 const participantOverlay = document.getElementById("participantOverlay");
 const participantName = document.getElementById("participantName");
 const participantSurname = document.getElementById("participantSurname");
+const participantPhone = document.getElementById("participantPhone");
 const participantContinue = document.getElementById("participantContinue");
 const participantError = document.getElementById("participantError");
 const participantBadge = document.getElementById("participantBadge");
@@ -1366,14 +1368,15 @@ function cargarParticipante(){
     try{
         const raw = readStorage(STORAGE_PARTICIPANTE);
         const data = raw ? JSON.parse(raw) : null;
-        if(data && data.nombre && data.apellido){
-            return {nombre:String(data.nombre), apellido:String(data.apellido)};
+        if(data && data.nombre && data.apellido && data.telefono){
+            return {nombre:String(data.nombre), apellido:String(data.apellido), telefono:String(data.telefono)};
         }
     }catch(e){}
     return null;
 }
 
 let participante = cargarParticipante();
+window.marynelParticipant = participante;
 
   // FASE A — Identidad local del dispositivo/navegador.
   // Este identificador NO es una prueba de identidad ni sustituye al backend.
@@ -1402,6 +1405,15 @@ function nombreCompleto(){
     return participante ? (participante.nombre + " " + participante.apellido).trim() : "";
 }
 
+function telefonoWhatsApp(){
+    if(!participante?.telefono) return "";
+    const raw = String(participante.telefono).trim();
+    const digits = raw.replace(/\D/g, "");
+    if(!digits) return "";
+    // Si se ingresan 8 dígitos, se interpreta como número de Guatemala.
+    return digits.length === 8 ? "502" + digits : digits;
+}
+
 function mostrarRegistroParticipante(){
     if(!participantOverlay || participante) return;
     participantOverlay.classList.add("open");
@@ -1413,7 +1425,7 @@ function actualizarParticipanteUI(){
     if(!participantBadge) return;
     if(participante){
         participantBadge.hidden = false;
-        participantBadge.textContent = "👤 Participante: " + nombreCompleto();
+        participantBadge.textContent = "👤 Participante: " + nombreCompleto() + " • 📱 " + (participante.telefono || "");
     }else{
         participantBadge.hidden = true;
         participantBadge.textContent = "";
@@ -1423,13 +1435,23 @@ function actualizarParticipanteUI(){
 function guardarParticipante(){
     const nombre = String(participantName?.value || "").trim().replace(/\s+/g," ");
     const apellido = String(participantSurname?.value || "").trim().replace(/\s+/g," ");
+    const telefonoRaw = String(participantPhone?.value || "").trim();
+    const telefono = telefonoRaw.replace(/\s+/g," ");
+    const telefonoDigits = telefono.replace(/\D/g, "");
 
     if(nombre.length < 2 || apellido.length < 2){
         if(participantError) participantError.textContent = "Escribe un nombre y un apellido válidos.";
         return;
     }
 
-    participante = {nombre, apellido};
+    if(telefonoDigits.length < 8 || telefonoDigits.length > 15){
+        if(participantError) participantError.textContent = "Escribe un número telefónico válido.";
+        participantPhone?.focus();
+        return;
+    }
+
+    participante = {nombre, apellido, telefono};
+    window.marynelParticipant = participante;
     writeStorage(STORAGE_PARTICIPANTE, JSON.stringify(participante));
     actualizarParticipanteUI();
 
@@ -1439,7 +1461,7 @@ function guardarParticipante(){
 }
 
 participantContinue?.addEventListener("click", guardarParticipante);
-[participantName, participantSurname].forEach(input => input?.addEventListener("keydown", e => {
+[participantName, participantSurname, participantPhone].forEach(input => input?.addEventListener("keydown", e => {
     if(e.key === "Enter") guardarParticipante();
 }));
 
@@ -1964,7 +1986,10 @@ window.addEventListener("resize", ajustarCanvas);
 
   const whatsappNumber = "50248681178";
   const winningPrize = (window.marynelPrepareWhatsAppClaim = function(prize) {
-    const text = `Felicidades, reclama tu premio al WhatsApp. Premio: ${prize}`;
+    const participant = window.marynelParticipant || null;
+    const nombre = participant ? `${participant.nombre || ""} ${participant.apellido || ""}`.trim() : "";
+    const telefono = participant?.telefono || "";
+    const text = `Felicidades, reclamo mi premio. Premio: ${prize}. Nombre: ${nombre}. Teléfono: ${telefono}`;
     link.href = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`;
     claim.classList.add("show");
     claim.setAttribute("aria-hidden","false");
