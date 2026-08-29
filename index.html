@@ -8,8 +8,8 @@
    Conecta esta página a Supabase. NO uses service_role aquí.
    ============================================================ */
 window.MARYNEL_DB = {
-  url: "https://TU-PROYECTO.supabase.co",
-  key: "TU_PUBLISHABLE_O_ANON_KEY"
+  url: "https://ybdfbbpxvnwmrucpwwma.supabase.co",
+  key: "sb_publishable_678Rr33UcURt8BuF34cDjA_Ay9wHae4"
 };
 
 window.marynelCentralConfigured = function(){
@@ -1432,7 +1432,7 @@ function actualizarParticipanteUI(){
     }
 }
 
-function guardarParticipante(){
+async function guardarParticipante(){
     const nombre = String(participantName?.value || "").trim().replace(/\s+/g," ");
     const apellido = String(participantSurname?.value || "").trim().replace(/\s+/g," ");
     const telefonoRaw = String(participantPhone?.value || "").trim();
@@ -1450,7 +1450,39 @@ function guardarParticipante(){
         return;
     }
 
-    participante = {nombre, apellido, telefono};
+    if(!window.marynelCentralConfigured || !window.marynelCentralConfigured()){
+        if(participantError) participantError.textContent = "La base central no está configurada.";
+        return;
+    }
+
+    if(participantContinue) participantContinue.disabled = true;
+    if(participantError) participantError.textContent = "Registrando participante…";
+
+    const r = await window.marynelCentralRpc("registrar_participante", {
+        p_campaign_id: "43d6928f-afe3-4ee7-9ea2-b365d0e4ca76",
+        p_nombre: nombre,
+        p_apellido: apellido,
+        p_telefono: telefono,
+        p_client_id: clientId
+    });
+
+    if(r.error){
+        if(participantError) participantError.textContent = "No se pudo registrar. Intenta nuevamente.";
+        if(participantContinue) participantContinue.disabled = false;
+        return;
+    }
+
+    if(r.data?.created !== true){
+        if(r.data?.reason === "already_registered"){
+            if(participantError) participantError.textContent = "Este dispositivo ya está registrado para esta campaña.";
+        }else{
+            if(participantError) participantError.textContent = "No se pudo completar el registro.";
+        }
+        if(participantContinue) participantContinue.disabled = false;
+        return;
+    }
+
+    participante = {nombre, apellido, telefono, participant_id: r.data.participant_id};
     window.marynelParticipant = participante;
     writeStorage(STORAGE_PARTICIPANTE, JSON.stringify(participante));
     actualizarParticipanteUI();
@@ -1458,6 +1490,7 @@ function guardarParticipante(){
     participantOverlay?.classList.remove("open");
     participantOverlay?.setAttribute("aria-hidden","true");
     if(participantError) participantError.textContent = "";
+    if(participantContinue) participantContinue.disabled = false;
 }
 
 participantContinue?.addEventListener("click", guardarParticipante);
