@@ -262,7 +262,7 @@ button{cursor:pointer}
       <div class="firebase-diagnostic-title">🔥 Diagnóstico Firebase</div>
       <div class="firebase-diagnostic-row">SDK: <b id="fbDiagSdk">—</b></div>
       <div class="firebase-diagnostic-row">Authentication: <b id="fbDiagAuth">—</b></div>
-      <div class="firebase-diagnostic-row">Realtime Database: <b id="fbDiagDb">—</b></div>
+      <div class="firebase-diagnostic-row">Cloud Firestore: <b id="fbDiagDb">—</b></div>
       <div class="firebase-diagnostic-row">Conexión RTDB: <b id="fbDiagConnection">—</b></div>
       <div class="firebase-diagnostic-row">UID: <b id="fbDiagUid">—</b></div>
       <div class="firebase-diagnostic-row">Último error: <b id="fbDiagError">—</b></div>
@@ -284,63 +284,35 @@ button{cursor:pointer}
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
 (() => {
-  // Firebase es soporte de datos. La ruleta nunca debe quedar bloqueada
-  // porque Authentication o Realtime Database estén temporalmente caídos.
   const firebaseConfig = {
     apiKey: "AIzaSyDDaet5RVkngXDrLX9hxvamtvRna9jGkiU",
     authDomain: "project-793664988756565670.firebaseapp.com",
-    databaseURL: "https://project-793664988756565670-default-rtdb.firebaseio.com",
+    databaseURL: "https://project-793664988756565670.firebaseio.com",
     projectId: "project-793664988756565670",
     storageBucket: "project-793664988756565670.firebasestorage.app",
     messagingSenderId: "173566254901",
     appId: "1:173566254901:web:4576a6e6e4ba0058e0767c"
   };
-
-  window.marynelFirebase = {
-    auth:null, db:null, ready:false, connected:false,
-    config:firebaseConfig, lastError:""
-  };
-
+  window.marynelFirebase = {auth:null,db:null,ready:false,connected:false,config:firebaseConfig,lastError:"",provider:"Cloud Firestore"};
   try {
-    if (typeof firebase === "undefined") {
-      window.marynelFirebase.lastError = "Firebase SDK no cargó.";
-      console.error("MARYNEL:", window.marynelFirebase.lastError);
-      return;
-    }
-
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-
+    if(typeof firebase === "undefined") throw new Error("Firebase SDK no cargó.");
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const auth = typeof firebase.auth === "function" ? firebase.auth() : null;
-    const db = typeof firebase.database === "function" ? firebase.database() : null;
-
-    window.marynelFirebase.auth = auth;
-    window.marynelFirebase.db = db;
-    window.marynelFirebase.ready = !!(auth && db);
-
-    if (auth) {
-      auth.onAuthStateChanged(user => {
-        window.marynelFirebase.uid = user?.uid || null;
-        if (typeof window.marynelActualizarFirebaseUI === "function") {
-          window.marynelActualizarFirebaseUI();
-        }
-      });
-    }
-
-    if (db) {
-      db.ref(".info/connected").on("value", snap => {
-        window.marynelFirebase.connected = snap.val() === true;
-        console.log("MARYNEL Firebase RTDB conectado:", window.marynelFirebase.connected);
-        if (typeof window.marynelActualizarFirebaseUI === "function") {
-          window.marynelActualizarFirebaseUI();
-        }
-      });
-    }
-  } catch (error) {
-    window.marynelFirebase.lastError = error?.message || String(error);
-    console.error("MARYNEL Firebase init:", error);
+    const db = typeof firebase.firestore === "function" ? firebase.firestore() : null;
+    window.marynelFirebase.auth=auth;
+    window.marynelFirebase.db=db;
+    window.marynelFirebase.ready=!!(auth&&db);
+    window.marynelFirebase.connected=!!db;
+    if(auth) auth.onAuthStateChanged(user=>{
+      window.marynelFirebase.uid=user?.uid||null;
+      if(typeof window.marynelActualizarFirebaseUI === "function") window.marynelActualizarFirebaseUI();
+    });
+  } catch(error) {
+    window.marynelFirebase.lastError=error?.message||String(error);
+    console.error("MARYNEL Firebase init:",error);
   }
 })();
 </script>
@@ -524,6 +496,8 @@ window.marynelParticipant = participante;
     return id;
   }
   const clientId = obtenerClientId();
+  window.marynelFirebase = window.marynelFirebase || {};
+  window.marynelFirebase.clientId = clientId;
 
 function nombreCompleto(){
     return participante ? (participante.nombre + " " + participante.apellido).trim() : "";
@@ -613,49 +587,29 @@ async function firebaseAuthAnonima(){
 }
 
 async function firebaseGuardarRegistro(registro, uid){
-    const db = window.marynelFirebase?.db;
-    if(!db) throw new Error("Firebase Realtime Database no está disponible.");
-
-    if(uid){
-        try{
-            await marynelConTimeout(
-                db.ref("participants/" + uid).set(registro),
-                7000,
-                "Tiempo de espera agotado al guardar en Realtime Database."
-            );
-            window.marynelFirebase.lastError = "";
-            window.marynelFirebase.lastWrite = Date.now();
-            if(typeof window.marynelActualizarFirebaseUI === "function"){
-                window.marynelActualizarFirebaseUI();
-            }
-            return {ok:true, method:"auth"};
-        }catch(e){
-            marynelFirebaseError(e);
-            throw e;
-        }
-    }
-
-    // Fallback: solo funcionará si las Security Rules permiten escritura sin auth.
-    const key = String(registro.client_id || "").replace(/[^a-zA-Z0-9_-]/g, "_");
-    if(!key) throw new Error("No existe client_id para guardar el participante.");
-
+    const db=window.marynelFirebase?.db;
+    if(!db) throw new Error("Cloud Firestore no está disponible.");
+    const docId=String(uid||registro.participant_id||registro.client_id||"").replace(/[^a-zA-Z0-9_-]/g,"_");
+    if(!docId) throw new Error("No existe un identificador válido para el participante.");
     try{
-        await marynelConTimeout(
-            db.ref("participants/" + key).set({...registro, firebase_uid:""}),
-            7000,
-            "Tiempo de espera agotado al guardar directamente en Realtime Database."
-        );
-        window.marynelFirebase.lastError = "";
-        window.marynelFirebase.lastWrite = Date.now();
-        if(typeof window.marynelActualizarFirebaseUI === "function"){
-            window.marynelActualizarFirebaseUI();
-        }
-        return {ok:true, method:"direct"};
-    }catch(e){
-        marynelFirebaseError(e);
-        throw e;
-    }
+      await marynelConTimeout(db.collection("participants").doc(docId).set({...registro,firebase_uid:uid||"",firebase_provider:"Cloud Firestore",updatedAt:Date.now()},{merge:true}),10000,"Tiempo de espera agotado al guardar en Cloud Firestore.");
+      window.marynelFirebase.lastError=""; window.marynelFirebase.lastWrite=Date.now(); window.marynelFirebase.connected=true;
+      if(typeof window.marynelActualizarFirebaseUI === "function") window.marynelActualizarFirebaseUI();
+      return {ok:true,method:"firestore",docId};
+    }catch(e){marynelFirebaseError(e);throw e;}
 }
+
+async function firebaseGuardarResultado(resultado){
+    const db=window.marynelFirebase?.db;
+    if(!db) throw new Error("Cloud Firestore no está disponible.");
+    const uid=window.marynelFirebase?.auth?.currentUser?.uid||"";
+    try{
+      const ref=await marynelConTimeout(db.collection("roulette_results").add({...resultado,firebase_uid:uid,firebase_provider:"Cloud Firestore",createdAt:Date.now(),fecha:new Date().toISOString()}),10000,"Tiempo de espera agotado al guardar el premio en Cloud Firestore.");
+      window.marynelFirebase.lastError=""; window.marynelFirebase.lastWrite=Date.now(); window.marynelFirebase.connected=true;
+      return {ok:true,id:ref.id};
+    }catch(e){marynelFirebaseError(e);throw e;}
+}
+window.firebaseGuardarResultado=firebaseGuardarResultado;
 
 async function guardarParticipante(){
     const nombre = String(participantName?.value || "").trim().replace(/\s+/g," ");
@@ -764,17 +718,13 @@ window.marynelActualizarFirebaseUI = function(){
     let cls = "";
 
     if(!sdk || !auth || !db){
-        label = "Firebase: error de SDK";
-        cls = "bad";
+        label = "Firestore: error de SDK"; cls = "bad";
     }else if(connected && uid){
-        label = "Firebase: conectado ✓";
-        cls = "ok";
+        label = "Firestore: conectado ✓"; cls = "ok";
     }else if(connected){
-        label = "Firebase: DB conectada";
-        cls = "warn";
+        label = "Firestore: listo"; cls = "warn";
     }else{
-        label = "Firebase: sin conexión";
-        cls = "bad";
+        label = "Firestore: sin conexión"; cls = "bad";
     }
 
     if(status){
@@ -790,79 +740,30 @@ window.marynelActualizarFirebaseUI = function(){
 
     set("fbDiagSdk", sdk ? "✅ Cargado" : "❌ No cargó");
     set("fbDiagAuth", auth ? (uid ? "✅ Activo" : "⚠️ Disponible, sin UID") : "❌ No disponible");
-    set("fbDiagDb", db ? "✅ Disponible" : "❌ No disponible");
-    set("fbDiagConnection", connected ? "🟢 Conectada" : "🔴 Desconectada");
+    set("fbDiagDb", db ? "✅ Firestore disponible" : "❌ Firestore no disponible");
+    set("fbDiagConnection", connected ? "🟢 SDK listo" : "🔴 No disponible");
     set("fbDiagUid", uid || "—");
     set("fbDiagError", mf.lastError || "Ninguno");
 };
 
 window.marynelProbarFirebase = async function(){
-    const status = document.getElementById("firebaseTestStatus");
-    const button = document.getElementById("firebaseTestButton");
-
-    if(status) status.textContent = "⏳ Probando Authentication y Realtime Database…";
-    if(button) button.disabled = true;
-
+    const status=document.getElementById("firebaseTestStatus"), button=document.getElementById("firebaseTestButton");
+    if(status) status.textContent="⏳ Probando Authentication + Cloud Firestore…";
+    if(button) button.disabled=true;
     try{
-        const mf = window.marynelFirebase || {};
-        if(!mf.auth || !mf.db){
-            throw new Error("El SDK de Firebase no está disponible.");
-        }
-
-        const connectedSnap = await marynelConTimeout(
-            mf.db.ref(".info/connected").once("value"),
-            5000,
-            "No se pudo comprobar la conexión con Realtime Database."
-        );
-
-        if(connectedSnap.val() !== true){
-            throw new Error("Realtime Database no reporta conexión.");
-        }
-
-        const user = await firebaseAuthAnonima();
-        if(!user?.uid){
-            throw new Error("Authentication no devolvió UID.");
-        }
-
-        const testKey = "connection_test_" + clientId.replace(/[^a-zA-Z0-9_-]/g, "_");
-        const testRef = mf.db.ref("connection_tests/" + testKey);
-
-        try{
-            await marynelConTimeout(
-                testRef.set({
-                    ok:true,
-                    uid:user.uid,
-                    timestamp:Date.now()
-                }),
-                5000,
-                "La escritura de prueba excedió el tiempo límite."
-            );
-
-            await marynelConTimeout(
-                testRef.remove(),
-                5000,
-                "La limpieza de la prueba excedió el tiempo límite."
-            );
-
-            if(status) status.textContent = "🟢 Firebase funciona: Authentication + Database + escritura comprobadas.";
-            mf.lastError = "";
-        }catch(writeError){
-            // La conexión sí existe; aquí distinguimos permisos de conexión.
-            const msg = writeError?.code === "PERMISSION_DENIED"
-                ? "🟡 Firebase está conectado, pero las Security Rules bloquean la escritura de prueba."
-                : "🟡 Firebase conecta, pero la escritura de prueba falló: " +
-                  (writeError?.code || writeError?.message || writeError);
-            if(status) status.textContent = msg;
-            marynelFirebaseError(writeError);
-        }
+      const mf=window.marynelFirebase||{};
+      if(!mf.auth||!mf.db) throw new Error("El SDK de Firebase/Firestore no está disponible.");
+      const user=await firebaseAuthAnonima();
+      if(!user?.uid) throw new Error("Authentication no devolvió UID.");
+      const testId="connection_test_"+String(mf.clientId||Date.now()).replace(/[^a-zA-Z0-9_-]/g,"_");
+      await marynelConTimeout(mf.db.collection("connection_tests").doc(testId).set({ok:true,uid:user.uid,provider:"Cloud Firestore",timestamp:Date.now()}),10000,"La escritura de prueba en Firestore excedió el tiempo límite.");
+      await marynelConTimeout(mf.db.collection("connection_tests").doc(testId).delete(),10000,"La limpieza de la prueba de Firestore excedió el tiempo límite.");
+      mf.connected=true; mf.lastError="";
+      if(status) status.textContent="🟢 Firestore funciona: Authentication + escritura comprobadas.";
     }catch(error){
-        const msg = error?.code ? error.code + ": " : "";
-        if(status) status.textContent = "🔴 Prueba fallida: " + msg + (error?.message || error);
-        marynelFirebaseError(error);
-    }finally{
-        if(button) button.disabled = false;
-        window.marynelActualizarFirebaseUI();
-    }
+      if(status) status.textContent="🔴 Prueba fallida: "+(error?.code?error.code+": ":"")+(error?.message||error);
+      marynelFirebaseError(error);
+    }finally{if(button) button.disabled=false; window.marynelActualizarFirebaseUI();}
 };
 
 document.getElementById("firebaseTestButton")?.addEventListener(
@@ -1408,15 +1309,19 @@ window.addEventListener("load", () => {
   window.addEventListener("marynel:resultado",function(e){
     const premio=String(e.detail?.premio||"").trim();
     if(!premio||BAD.test(premio))return;
-    const detail={premio,participante:e.detail?.participante||null,client_id:clientId};
-    const h=localClean();
-    h.unshift({premio,fecha:new Date().toLocaleString("es-GT"),ts:Date.now(),participante:detail.participante});
+    const participant=e.detail?.participante||window.marynelParticipant||null;
+    const detail={premio,participante:participant,client_id:participant?.client_id||window.marynelFirebase?.clientId||""};
+    const item={premio,fecha:new Date().toLocaleString("es-GT"),ts:Date.now(),participante:detail.participante};
+    const h=localClean(); h.unshift(item);
     try{localStorage.setItem(KEY,JSON.stringify(h.slice(0,50)));}catch(e){}
     render(h);
-
-    const win=document.getElementById("winCelebration"), winPrize=document.getElementById("winPrize");
+    if(window.marynelFirebase?.db){
+      firebaseGuardarResultado({premio,participante,client_id:detail.client_id})
+        .catch(err=>console.warn("MARYNEL: premio pendiente en Firestore.",err));
+    }
+    const win=document.getElementById("winCelebration"),winPrize=document.getElementById("winPrize");
     if(win&&winPrize){winPrize.textContent=premio;win.classList.add("show");win.setAttribute("aria-hidden","false");}
-});
+  });
 
   document.getElementById("closeWin")?.addEventListener("click",function(){const win=document.getElementById("winCelebration");win?.classList.remove("show");win?.setAttribute("aria-hidden","true");});
   load();
