@@ -222,7 +222,7 @@ button{cursor:pointer}
   <div class="brand"><div class="brand-mark">M</div><div><h1>MARYNEL</h1><p>Ruleta promocional • Sistema de participación</p></div></div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
     <div id="firebaseStatus" class="firebase-status" title="Estado de Firebase">
-      <span class="firebase-dot"></span><span id="firebaseStatusText">Firebase: comprobando…</span>
+      <span class="firebase-dot"></span>
     </div>
     <button id="adminToggle" class="admin-toggle" type="button">⚙️ Administración</button>
   </div>
@@ -760,32 +760,27 @@ async function guardarParticipante(){
 window.marynelActualizarFirebaseUI = function(){
     const mf = window.marynelFirebase || {};
     const status = document.getElementById("firebaseStatus");
-    const statusText = document.getElementById("firebaseStatusText");
 
     const sdk = typeof firebase !== "undefined";
     const auth = !!mf.auth;
     const db = !!mf.db;
     const connected = mf.connected === true;
     const uid = mf.auth?.currentUser?.uid || mf.uid || null;
-
-    let label = "Firebase: comprobando…";
     let cls = "";
-
     if(!sdk || !auth || !db){
-        label = "Firestore: error de SDK"; cls = "bad";
+        cls = "bad";
     }else if(connected && uid){
-        label = "Firestore: conectado ✓"; cls = "ok";
+        cls = "ok";
     }else if(connected){
-        label = "Firestore: listo"; cls = "warn";
+        cls = "warn";
     }else{
-        label = "Firestore: sin conexión"; cls = "bad";
+        cls = "bad";
     }
 
     if(status){
         status.className = "firebase-status " + cls;
         status.title = mf.lastError || "Estado de Firebase";
     }
-    if(statusText) statusText.textContent = label;
 
     const set = (id, value) => {
         const el = document.getElementById(id);
