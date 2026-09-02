@@ -205,6 +205,17 @@ button{cursor:pointer}
 })();
 </script>
 
+
+<style id="marynel-animejs-enhancements">
+  .marynel-confetti-layer{position:absolute;inset:0;z-index:10001;pointer-events:none;overflow:hidden}
+  .marynel-confetti{position:absolute;width:8px;height:14px;border-radius:2px;box-shadow:0 0 8px rgba(255,255,255,.25);transform-origin:center}
+  #winCelebration .win-box{will-change:transform,opacity}
+  #winPrize{will-change:transform,opacity}
+  @media(prefers-reduced-motion:reduce){
+    .marynel-confetti-layer{display:none!important}
+  }
+</style>
+
 </head>
 \n<!-- MARYNEL LYRA X7 EMBEBIDA: background + torso + head + blink + talk en Base64. Sin archivos externos de imagen. -->\n<body>
 <div class="app">
@@ -1783,6 +1794,228 @@ window.addEventListener("load", () => {
       }
     }
   }, true);
+})();
+</script>
+
+
+<!-- MARYNEL ANIME.JS ENHANCEMENTS
+     Capa visual independiente: no reemplaza la lógica de Firebase,
+     probabilidades, giro Canvas, historial ni WhatsApp. -->
+<script type="module">
+(() => {
+  const loadAnime = import('https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/modules/index.js')
+    .then(mod => mod)
+    .catch(err => {
+      console.warn('MARYNEL Anime.js: no se pudo cargar la librería. La ruleta seguirá funcionando normalmente.', err);
+      return null;
+    });
+
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  function createConfetti() {
+    if (reducedMotion) return;
+    const box = document.getElementById('winCelebration');
+    if (!box) return;
+
+    const old = box.querySelector('.marynel-confetti-layer');
+    old?.remove();
+
+    const layer = document.createElement('div');
+    layer.className = 'marynel-confetti-layer';
+    layer.setAttribute('aria-hidden', 'true');
+    box.appendChild(layer);
+
+    const colors = ['#00eaff','#ff8fcb','#ffe600','#7ef5b4','#c7a6ff','#ffb36b'];
+    for (let i = 0; i < 34; i++) {
+      const piece = document.createElement('span');
+      piece.className = 'marynel-confetti';
+      piece.style.left = '50%';
+      piece.style.top = '45%';
+      piece.style.background = colors[i % colors.length];
+      piece.style.transform = `rotate(${Math.random() * 360}deg)`;
+      layer.appendChild(piece);
+    }
+
+    loadAnime.then(anime => {
+      if (!anime) return;
+      const { animate } = anime;
+      animate(layer.children, {
+        translateX: () => `${(Math.random() - 0.5) * 620}px`,
+        translateY: () => `${120 + Math.random() * 420}px`,
+        rotate: () => `${360 + Math.random() * 720}deg`,
+        opacity: [1, 0],
+        scale: [1, 0.65],
+        delay: (_, i) => i * 9,
+        duration: 1250 + Math.random() * 700,
+        ease: 'out(4)',
+        onComplete: () => {
+          setTimeout(() => layer.remove(), 100);
+        }
+      });
+    });
+  }
+
+  function pulseRoulette() {
+    if (reducedMotion) return;
+    const wrap = document.querySelector('.roulette-wrap');
+    if (!wrap) return;
+    loadAnime.then(anime => {
+      if (!anime) return;
+      anime.animate(wrap, {
+        scale: [1, 1.018, 1],
+        boxShadow: [
+          '0 0 30px rgba(0,234,255,.16)',
+          '0 0 75px rgba(0,234,255,.55)',
+          '0 0 38px rgba(255,143,203,.35)',
+          '0 0 30px rgba(0,234,255,.16)'
+        ],
+        duration: 900,
+        ease: 'out(4)'
+      });
+    });
+  }
+
+  function animatePointerStart() {
+    if (reducedMotion) return null;
+    const pointer = document.querySelector('.pointer');
+    if (!pointer) return null;
+    return loadAnime.then(anime => {
+      if (!anime) return null;
+      const animation = anime.animate(pointer, {
+        scaleY: [1, 0.78, 1],
+        duration: 145,
+        loop: true,
+        ease: 'inOut(2)'
+      });
+      return animation;
+    });
+  }
+
+  function animatePointerEnd(pointerAnimation) {
+    const pointer = document.querySelector('.pointer');
+    if (pointerAnimation?.pause) pointerAnimation.pause();
+    if (!pointer || reducedMotion) return;
+    loadAnime.then(anime => {
+      if (!anime) return;
+      anime.animate(pointer, {
+        scaleY: [1, 0.72, 1.08, 1],
+        duration: 420,
+        ease: 'out(4)'
+      });
+    });
+  }
+
+  function animateWin() {
+    const win = document.getElementById('winCelebration');
+    const box = win?.querySelector('.win-box');
+    const label = win?.querySelector('.win-label');
+    const prize = document.getElementById('winPrize');
+    const participant = document.getElementById('winParticipant');
+    const button = document.getElementById('closeWin');
+    if (!win || !box || reducedMotion) return;
+
+    loadAnime.then(anime => {
+      if (!anime) return;
+      const { animate, stagger } = anime;
+      animate(box, {
+        scale: [0.72, 1.06, 0.98, 1],
+        opacity: [0, 1],
+        duration: 720,
+        ease: 'out(4)'
+      });
+      if (label) animate(label, { translateY: [-18, 0], opacity: [0, 1], duration: 500, ease: 'out(3)' });
+      if (prize) animate(prize, { scale: [0.55, 1.18, 1], rotate: ['-3deg','2deg','0deg'], opacity: [0,1], duration: 800, ease: 'out(4)' });
+      if (participant) animate(participant, { translateY: [12,0], opacity: [0,1], duration: 550, delay: 180, ease: 'out(3)' });
+      if (button) animate(button, { scale: [0.9,1], opacity: [0,1], duration: 450, delay: 260, ease: 'out(3)' });
+      createConfetti();
+    });
+  }
+
+  function animateCloseWin() {
+    const win = document.getElementById('winCelebration');
+    const box = win?.querySelector('.win-box');
+    if (!win || !box || reducedMotion) return;
+    loadAnime.then(anime => {
+      if (!anime) return;
+      anime.animate(box, {
+        scale: [1, 0.94],
+        opacity: [1, 0],
+        duration: 180,
+        ease: 'in(2)',
+        onComplete: () => {
+          win.classList.remove('show');
+          win.setAttribute('aria-hidden', 'true');
+          box.style.opacity = '';
+          box.style.transform = '';
+        }
+      });
+    });
+  }
+
+  function setupButtonEffects() {
+    const button = document.getElementById('girar');
+    if (!button || reducedMotion) return;
+    loadAnime.then(anime => {
+      if (!anime) return;
+      button.addEventListener('mouseenter', () => anime.animate(button, { scale: 1.025, duration: 180, ease: 'out(3)' }));
+      button.addEventListener('mouseleave', () => anime.animate(button, { scale: 1, duration: 220, ease: 'out(3)' }));
+      button.addEventListener('mousedown', () => anime.animate(button, { scale: 0.97, duration: 100, ease: 'out(2)' }));
+      button.addEventListener('mouseup', () => anime.animate(button, { scale: 1.025, duration: 140, ease: 'out(3)' }));
+    });
+  }
+
+  let pointerAnimationPromise = null;
+  let spinActive = false;
+
+  document.addEventListener('click', e => {
+    if (e.target.closest?.('#girar')) {
+      if (!spinActive) {
+        spinActive = true;
+        pointerAnimationPromise = animatePointerStart();
+      }
+    }
+  }, true);
+
+  window.addEventListener('marynel:resultado', () => {
+    pulseRoulette();
+    Promise.resolve(pointerAnimationPromise).then(animatePointerEnd);
+    pointerAnimationPromise = null;
+    spinActive = false;
+  });
+
+  // El historial ya dispara el mismo evento y muestra el modal; aquí solo
+  // añadimos la presentación visual después de que el DOM tenga el premio.
+  window.addEventListener('marynel:resultado', () => {
+    setTimeout(animateWin, 30);
+  });
+
+  document.addEventListener('click', e => {
+    if (e.target.closest?.('#closeWin')) {
+      const win = document.getElementById('winCelebration');
+      if (win?.classList.contains('show') && !reducedMotion) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        animateCloseWin();
+      }
+    }
+  }, true);
+
+  setupButtonEffects();
+
+  // Entrada suave inicial de los bloques, sin alterar su posición ni layout.
+  if (!reducedMotion) {
+    loadAnime.then(anime => {
+      if (!anime) return;
+      const { animate, stagger } = anime;
+      animate('.main-panel, .sidebar', {
+        opacity: [0, 1],
+        translateY: [12, 0],
+        delay: stagger(70),
+        duration: 500,
+        ease: 'out(3)'
+      });
+    });
+  }
 })();
 </script>
 
